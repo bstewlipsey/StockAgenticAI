@@ -1,0 +1,9 @@
+python-dotenv==1.1.0
+yfinance==0.2.61
+pandas==2.2.3
+numpy==2.2.6
+colorama==0.4.6
+ta==0.11.0
+ccxt==4.2.17
+alpaca-trade-api==3.0.0
+google-generativeai==0.3.2
