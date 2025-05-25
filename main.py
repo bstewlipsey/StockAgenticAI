@@ -1,5 +1,6 @@
 from agent import TradingAgent, analyze_asset, print_performance_summary, print_portfolio_summary
 from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+from trading_variables import TRADING_ASSETS
 import logging
 from colorama import init, Fore, Style
 
@@ -13,12 +14,8 @@ def main():
 
     print(f"\n{Style.BRIGHT}🤖 Starting StockAgenticAI...{Style.RESET_ALL}")
 
-    # List of assets to monitor (symbol, type)
-    assets = [
-        ("AAPL", "stock"),
-        ("XXBTZUSD", "crypto"),
-        ("XETHZUSD", "crypto")
-    ]
+    # Use assets from trading_variables.py
+    assets = TRADING_ASSETS
 
     try:
         for symbol, asset_type in assets:

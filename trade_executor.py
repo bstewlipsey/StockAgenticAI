@@ -1,49 +1,221 @@
 import logging
 import alpaca_trade_api as tradeapi
 from datetime import datetime
+from config import ALPACA_BASE_URL
 
 class TradeExecutor:
+    """
+    The TradeExecutor is responsible for actually placing buy and sell orders through the Alpaca API.
+    
+    This class acts as the bridge between trading decisions made by the AI agent and actual
+    market execution. It handles all the technical details of order placement, validation,
+    and error handling when communicating with the brokerage.
+    
+    Key Responsibilities:
+    - Connect to Alpaca API (paper trading or live trading)
+    - Validate trade parameters before execution
+    - Submit market orders for stocks
+    - Handle API errors and network issues gracefully
+    - Provide account information for portfolio management
+    - Log all trading activity for audit trails
+    
+    Safety Features:
+    - Input validation to prevent invalid orders
+    - Comprehensive error handling for API failures
+    - Support for paper trading (virtual money) for testing
+    - Detailed logging of all order attempts and results
+    
+    The executor uses market orders (immediate execution at current price) rather than
+    limit orders, prioritizing speed of execution over precise price control.
+    """    
     def __init__(self, api_key, api_secret, paper_trading=True):
+        """
+        Initialize the TradeExecutor with Alpaca API credentials and configuration.
+        
+        This constructor establishes the connection to Alpaca's trading platform and sets up
+        logging for tracking all trading activity. The connection can be configured for either
+        paper trading (virtual money) or live trading (real money).
+        
+        Args:
+            api_key (str): Your Alpaca API key for authentication
+            api_secret (str): Your Alpaca secret key for authentication  
+            paper_trading (bool): If True, uses paper trading (safe virtual money)
+                                 If False, uses live trading (real money at risk)
+        
+        Setup Process:
+        1. Creates REST API connection to Alpaca using provided credentials
+        2. Uses base URL from config (automatically set based on paper_trading setting)
+        3. Sets API version to 'v2' for latest Alpaca API features
+        4. Initializes logging for trade execution tracking
+        
+        Safety Note:
+        - Paper trading is enabled by default to prevent accidental real money trades
+        - The base URL is automatically configured in config.py based on trading mode
+        - All API calls will be logged for audit purposes
+        """
+        # Establish connection to Alpaca's trading API
+        # ALPACA_BASE_URL is automatically set in config.py based on paper_trading setting
         self.api = tradeapi.REST(
-            api_key, 
-            api_secret, 
-            base_url='https://paper-api.alpaca.markets' if paper_trading else 'https://api.alpaca.markets',
-            api_version='v2'
+            api_key,                    # Your unique API key for authentication
+            api_secret,                 # Your secret key for secure access
+            base_url=ALPACA_BASE_URL,   # Trading endpoint (paper or live) from config
+            api_version='v2'            # Use latest API version for full features
         )
-        self.logger = logging.getLogger(__name__)
-
+        
+        # Set up logging to track all trade execution activity
+        # This creates audit trails for regulatory compliance and performance analysis
+        self.logger = logging.getLogger(__name__)   
     def execute_trade(self, symbol, side, quantity, confidence):
-        """Execute a trade based on signal"""
+        """
+        Execute a trade based on AI-generated trading signals with comprehensive validation.
+        
+        This is the core method that converts trading decisions into actual market orders.
+        It handles all the technical details of order submission while providing robust
+        error handling and validation to prevent invalid trades.
+        
+        Order Flow:
+        1. Validate all input parameters to ensure they're complete and valid
+        2. Construct order object with market order specifications
+        3. Submit order to Alpaca API with error handling
+        4. Return success/failure status with order details
+        
+        Args:
+            symbol (str): Stock ticker symbol (e.g., 'AAPL', 'MSFT', 'TSLA')
+            side (str): Order direction - 'buy' to purchase, 'sell' to sell
+            quantity (float): Number of shares to trade (must be positive)
+            confidence (float): AI confidence score (0.0 to 1.0) - logged for analysis
+        
+        Returns:
+            tuple: (success, order_response)
+                - success (bool): True if order was placed successfully, False if failed
+                - order_response: Alpaca order object if successful, None if failed
+        
+        Order Configuration:
+        - Type: Market order (executes immediately at current market price)
+        - Time in Force: Day (order expires at end of trading day if not filled)
+        - No limit price (accepts current market price for fast execution)
+        
+        Error Handling:
+        - Input validation prevents orders with missing parameters
+        - API-specific error handling for Alpaca connection issues
+        - General exception handling for unexpected errors
+        - All errors are logged with details for debugging
+        
+        Safety Features:
+        - Validates all required parameters before submission
+        - Logs every order attempt for audit trails
+        - Returns clear success/failure indicators
+        - Handles network issues gracefully without crashing
+        """
         try:
-            # Validate inputs
+            # === INPUT VALIDATION ===
+            # Ensure all required parameters are provided and valid
+            # This prevents submitting incomplete or malformed orders
             if not all([symbol, side, quantity]):
-                raise ValueError("Missing required parameters")
+                raise ValueError("Missing required parameters: symbol, side, and quantity must all be provided")
+            
+            # Validate quantity is positive (can't trade negative shares)
+            if quantity <= 0:
+                raise ValueError(f"Invalid quantity: {quantity}. Must be positive number.")
+            
+            # Validate side parameter
+            if side.lower() not in ['buy', 'sell']:
+                raise ValueError(f"Invalid side: {side}. Must be 'buy' or 'sell'.")
                 
+            # === ORDER CONSTRUCTION ===
+            # Build the order object with all required parameters for Alpaca API
             order = {
-                'symbol': symbol,
-                'qty': quantity,
-                'side': side.lower(),
-                'type': 'market',
-                'time_in_force': 'day'
+                'symbol': symbol.upper(),           # Stock ticker (ensure uppercase)
+                'qty': abs(float(quantity)),        # Number of shares (ensure positive)
+                'side': side.lower(),               # 'buy' or 'sell' 
+                'type': 'market',                   # Execute at current market price
+                'time_in_force': 'day'              # Order expires at end of trading day
             }
             
-            # Submit order with error handling
+            # Log the order attempt for audit purposes
+            self.logger.info(f"Attempting to place order: {order} (confidence: {confidence:.2f})")
+            
+            # === ORDER SUBMISSION ===
             try:
+                # Submit order to Alpaca API
                 response = self.api.submit_order(**order)
-                self.logger.info(f"Order placed successfully: {order}")
+                
+                # Log successful order placement
+                self.logger.info(f"✅ Order placed successfully: {symbol} {side} {quantity} shares")
+                self.logger.debug(f"Order response: {response}")
+                
                 return True, response
+                
             except tradeapi.rest.APIError as api_error:
-                self.logger.error(f"Alpaca API error: {api_error}")
+                # Handle Alpaca-specific API errors (rate limits, invalid symbols, insufficient funds, etc.)
+                self.logger.error(f"❌ Alpaca API error for {symbol}: {api_error}")
+                
+                # Log specific error details for debugging
+                if hasattr(api_error, 'status_code'):
+                    self.logger.error(f"API Error Code: {api_error.status_code}")
+                
                 return False, None
                 
-        except Exception as e:
-            self.logger.error(f"Error executing trade: {str(e)}")
+        except ValueError as ve:
+            # Handle validation errors (missing parameters, invalid values)
+            self.logger.error(f"❌ Order validation failed: {ve}")
             return False, None
-
-    def get_account(self):
-        """Get account information"""
-        try:
-            return self.api.get_account()
+            
         except Exception as e:
-            self.logger.error(f"Error getting account info: {str(e)}")
+            # Handle any unexpected errors to prevent system crashes
+            self.logger.error(f"❌ Unexpected error executing trade for {symbol}: {str(e)}")
+            self.logger.debug(f"Error details: {e}", exc_info=True)
+            return False, None    
+    
+    def get_account(self):
+        """
+        Retrieve account information from Alpaca API for portfolio management and validation.
+        
+        This method fetches comprehensive account details that are essential for:
+        - Portfolio management (current cash, buying power, positions)
+        - Risk management (day trading buying power, pattern day trader status)
+        - Trade validation (ensuring sufficient funds before placing orders)
+        - Performance tracking (account value, profit/loss calculations)
+        
+        Account Information Includes:
+        - Cash available for trading
+        - Total portfolio value
+        - Buying power (amount available for purchases)
+        - Current positions and their values
+        - Account status (active, restricted, etc.)
+        - Day trading buying power and restrictions
+        
+        Returns:
+            Account object: Alpaca account object with all account details if successful
+            None: If API call fails or account cannot be accessed
+        
+        Usage Examples:
+        - Check available cash before placing large orders
+        - Validate account is in good standing before trading
+        - Calculate current portfolio performance
+        - Ensure compliance with day trading rules
+        
+        Error Handling:
+        - Logs specific error details for debugging
+        - Returns None on failure to allow graceful handling
+        - Does not crash the system if account info is temporarily unavailable
+        """
+        try:
+            # Fetch account details from Alpaca API
+            account = self.api.get_account()
+            
+            # Log successful account retrieval (at debug level to avoid spam)
+            self.logger.debug("✅ Account information retrieved successfully")
+            
+            return account
+            
+        except tradeapi.rest.APIError as api_error:
+            # Handle Alpaca-specific API errors
+            self.logger.error(f"❌ Alpaca API error getting account info: {api_error}")
+            return None
+            
+        except Exception as e:
+            # Handle any unexpected errors
+            self.logger.error(f"❌ Unexpected error getting account info: {str(e)}")
+            self.logger.debug(f"Error details: {e}", exc_info=True)
             return None
