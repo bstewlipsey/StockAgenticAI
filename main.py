@@ -18,7 +18,7 @@ def main():
     assets = TRADING_ASSETS
 
     try:
-        for symbol, asset_type in assets:
+        for symbol, asset_type, _ in assets:
             print(f"\n📊 Analyzing {symbol} ({asset_type.upper()})...")
             
             # Get analysis

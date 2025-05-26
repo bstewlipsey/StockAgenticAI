@@ -1,5 +1,6 @@
 import logging
 import alpaca_trade_api as tradeapi
+from alpaca_trade_api.rest import URL
 from datetime import datetime
 from config import ALPACA_BASE_URL
 
@@ -52,13 +53,12 @@ class TradeExecutor:
         - Paper trading is enabled by default to prevent accidental real money trades
         - The base URL is automatically configured in config.py based on trading mode
         - All API calls will be logged for audit purposes
-        """
-        # Establish connection to Alpaca's trading API
+        """        # Establish connection to Alpaca's trading API
         # ALPACA_BASE_URL is automatically set in config.py based on paper_trading setting
         self.api = tradeapi.REST(
             api_key,                    # Your unique API key for authentication
             api_secret,                 # Your secret key for secure access
-            base_url=ALPACA_BASE_URL,   # Trading endpoint (paper or live) from config
+            base_url=URL(ALPACA_BASE_URL),   # Trading endpoint (paper or live) from config
             api_version='v2'            # Use latest API version for full features
         )
         
@@ -251,14 +251,18 @@ if __name__ == "__main__":
             # Use allocation_usd from the tuple; fallback to DEFAULT_TRADE_AMOUNT_USD if missing or zero
             if not allocation_usd:
                 from trading_variables import DEFAULT_TRADE_AMOUNT_USD
-                allocation_usd = DEFAULT_TRADE_AMOUNT_USD
-            # === Get current price ===
-            if asset_type.lower() == 'crypto':
-                # For crypto, use Alpaca's get_crypto_latest_trade
-                price = float(executor.api.get_crypto_latest_trade(symbol.split('/')[0], symbol.split('/')[1]).price)
+                allocation_usd = DEFAULT_TRADE_AMOUNT_USD            # === Get current price ===            if asset_type.lower() == 'crypto':
+                # For crypto, use Alpaca's get_crypto_snapshot (v2 API)
+                # Convert BTC/USD format to BTCUSD for Alpaca API
+                crypto_symbol = symbol.replace('/', '')
+                snapshot = executor.api.get_crypto_snapshot(crypto_symbol)
+                # Get the quote from the snapshot
+                quote = snapshot[crypto_symbol].latest_quote
+                price = float(quote.ap) if quote.ap else float(quote.bp)
             else:
-                # For stocks, use Alpaca's get_last_trade
-                price = float(executor.api.get_last_trade(symbol).price)
+                # For stocks, use Alpaca's get_latest_quote (v2 API)
+                quote = executor.api.get_latest_quote(symbol)
+                price = float(quote.ap) if quote.ap else float(quote.bp)
             # === Calculate quantity based on allocation and price ===
             qty = allocation_usd / price
             if asset_type.lower() == 'crypto':

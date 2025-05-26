@@ -14,7 +14,8 @@ from colorama import init, Fore, Style  # Colored terminal output
 import google.generativeai as genai  # Gemini AI API
 from google.generativeai.types import GenerationConfig # Configuration for AI generation
 import alpaca_trade_api as tradeapi  # Alpaca trading API
-from alpaca_trade_api import REST
+from alpaca_trade_api import REST, TimeFrame
+from alpaca_trade_api.rest import URL
 import ccxt  # Crypto exchange API
 
 # === Project Module Imports ===
@@ -81,8 +82,19 @@ except Exception as e:
 
 # 2. Initialize Alpaca API (for stock trading)
 try:
+    # Validate API credentials are not None
+    if not ALPACA_API_KEY:
+        raise ValueError("ALPACA_API_KEY is required but not set in environment")
+    if not ALPACA_SECRET_KEY:
+        raise ValueError("ALPACA_SECRET_KEY is required but not set in environment")
+    
     # Use Alpaca's paper trading endpoint for safety
-    api = tradeapi.REST(ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL)
+    api = tradeapi.REST(
+        key_id=ALPACA_API_KEY,
+        secret_key=ALPACA_SECRET_KEY,
+        base_url=URL(ALPACA_BASE_URL),
+        api_version='v2'
+    )
     logger.info("Alpaca API initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize Alpaca API: {e}")
@@ -152,7 +164,7 @@ class TradingAgent:
         self.sizer = PositionSizer(total_capital=TOTAL_CAPITAL)           # Determines position sizes
         self.db = Database()                                              # Handles analysis and trade history storage
         # Create a lookup map for asset types for quick access in monitor_positions
-        self.asset_type_map = {symbol: asset_type for symbol, asset_type in TRADING_ASSETS}
+        self.asset_type_map = {symbol: asset_type for symbol, asset_type, _ in TRADING_ASSETS}
         
     def get_current_price(self, symbol, asset_type):
         """
@@ -176,8 +188,8 @@ class TradingAgent:
                     if data and 'current_price' in data:
                         return data['current_price']
                 else:
-                    # Fetch current price for stock
-                    quote = api.get_last_quote(symbol)
+                    # Fetch current price for stock (Alpaca v2)
+                    quote = api.get_latest_quote(symbol)
                     if quote and hasattr(quote, 'ap'):
                         return float(quote.ap)
 
@@ -341,19 +353,20 @@ class TradingAgent:
         Note: This is a high-level coordination method that delegates the actual
         analysis and trading logic to specialized components.
         """
+        logger = logging.getLogger(__name__)
+        logger.info(f"[run_trading_cycle] Starting analysis for assets: {assets}")
         results = []
-        
-        for symbol, asset_type in assets:
-            print(f"\n📊 Analyzing {symbol} ({asset_type.upper()})...")
-            # Analyze the asset to get trading recommendations
+        for symbol, asset_type, _ in assets:
+            logger.info(f"[run_trading_cycle] Analyzing {symbol} ({asset_type})...")
             analysis = analyze_asset(symbol, asset_type)
-            
+            logger.info(f"[run_trading_cycle] Analysis for {symbol}: {analysis}")
             if isinstance(analysis, dict) and "error" not in analysis:
                 current_price = self.get_current_price(symbol, asset_type)
+                logger.info(f"[run_trading_cycle] Current price for {symbol}: {current_price}")
                 if current_price:
                     self.db.save_analysis(symbol, asset_type, analysis, current_price)
                     results.append((symbol, analysis))
-                    
+        logger.info(f"[run_trading_cycle] Completed. Results: {results}")
         return results
 
     def monitor_positions(self):
@@ -563,8 +576,7 @@ def get_crypto_data(symbol):
         logger.debug(f"Converted {base}/{quote} to Kraken format: {symbol}")
         
         # Fetch current market data
-        ticker = crypto_exchange.fetch_ticker(symbol)
-        # Get yesterday's closing price from OHLCV data
+        ticker = crypto_exchange.fetch_ticker(symbol)        # Get yesterday's closing price from OHLCV data
         ohlcv = crypto_exchange.fetch_ohlcv(symbol, '1d', limit=2)
         
         return {
@@ -721,8 +733,7 @@ def analyze_asset(symbol, asset_type='stock'):
             data = get_crypto_data(symbol)
             if not data:
                 return {"error": "Could not fetch crypto data"}
-            
-            # Get historical prices for technical analysis
+              # Get historical prices for technical analysis
             ohlcv = crypto_exchange.fetch_ohlcv(symbol, '1d', limit=50)
             prices = [candle[4] for candle in ohlcv]  # Using closing prices
             
@@ -754,19 +765,20 @@ def analyze_asset(symbol, asset_type='stock'):
             # Generate prompt using template
             prompt = CRYPTO_ANALYSIS_TEMPLATE.format(**template_vars)
             # Generate content using the Gemini model
+            try:
+                response = model.generate_content(
+                    prompt,
+                    generation_config=GenerationConfig(
+                        temperature=TEMPERATURE,
+                        top_p=0.8,
+                        top_k=MAX_TOKENS
+                    )
+                )
+            except Exception as e:
+                return {"error": f"Gemini model error: {str(e)}"}
 
         else:
             return analyze_stock(symbol, asset_type)  # Pass asset_type parameter
-
-        response = model.generate_content(
-            prompt,
-            generation_config=GenerationConfig(
-                temperature=TEMPERATURE,
-                top_p=0.8,
-                top_k=MAX_TOKENS
-            )
-        )
-        
 
         # Check if the AI's response was blocked
         if response.prompt_feedback and response.prompt_feedback.block_reason:
@@ -842,28 +854,37 @@ def analyze_stock(symbol, asset_type='stock'):
     
     
     try:
-        # Get current stock data
-        quote = api.get_last_quote(symbol)
+        # Get current stock data (Alpaca v2)
+        quote = api.get_latest_quote(symbol)        # Get historical data for technical analysis (Alpaca v2)
+        bars = api.get_bars(symbol, '1Day', limit=50)  # type: ignore
         
-        # Get historical data for technical analysis
-        historical_bars = api.get_barset(symbol, 'day', limit=50)[symbol]
-        prices = [bar.c for bar in historical_bars]  # Close prices
-        volumes = [bar.v for bar in historical_bars]  # Volume data
+        # Check for empty bars and handle gracefully
+        if not bars:
+            logger.warning(f"No bars returned for {symbol} with timeframe {DEFAULT_TIMEFRAME}. Skipping analysis.")
+            return {"error": f"No market data available for {symbol} ({DEFAULT_TIMEFRAME})"}
+        prices = [bar.c for bar in bars]
+        volumes = [bar.v for bar in bars]
         
         # Calculate technical indicators
         tech_analysis = TechnicalAnalysis(prices)
         signals, indicators = tech_analysis.get_signals()
-        
-        # Format trading signals into readable text
+          # Format trading signals into readable text
         signal_summary = "\n".join([f"- {signal}: {reason} (Confidence: {confidence*100:.0f}%)" 
                                   for signal, reason, confidence in signals])
         
         # Get market context
         try:
-            # Get S&P 500 data for market context
-            spy_bars = api.get_barset('SPY', 'day', limit=1)['SPY']
-            market_change = ((spy_bars[-1].c - spy_bars[-1].o) / spy_bars[-1].o) * 100
-            market_context = "Bullish" if market_change > 0 else "Bearish"
+            # Get S&P 500 data for market context (Alpaca v2)
+            spy_bars = api.get_bars('SPY', '1Day', limit=1)  # type: ignore
+            
+            # Check for empty bars and handle gracefully
+            if not spy_bars:
+                logger.warning(f"No bars returned for SPY with timeframe {DEFAULT_TIMEFRAME}. Skipping market context.")
+                market_change = 0
+                market_context = "Neutral"
+            else:
+                market_change = ((spy_bars[-1].c - spy_bars[-1].o) / spy_bars[-1].o) * 100
+                market_context = "Bullish" if market_change > 0 else "Bearish"
         except Exception as e:
             logger.warning(f"Could not fetch market context: {e}")
             market_change = 0
@@ -881,6 +902,7 @@ def analyze_stock(symbol, asset_type='stock'):
                 raise   
 
         current_price = float(quote.ap)
+        
         position = Position(
             symbol=symbol,
             quantity=float(position_qty),
@@ -891,7 +913,7 @@ def analyze_stock(symbol, asset_type='stock'):
         
         risk_metrics = risk_manager.calculate_position_risk(position)
         # Calculate additional metrics
-        price_change = ((current_price - historical_bars[0].c) / historical_bars[0].c) * 100
+        price_change = ((current_price - prices[0]) / prices[0]) * 100
         avg_volume = sum(volumes) / len(volumes)
         current_volume = volumes[-1]
         volume_ratio = current_volume / avg_volume if avg_volume > 0 else 1
@@ -932,15 +954,17 @@ def analyze_stock(symbol, asset_type='stock'):
         prompt = STOCK_ANALYSIS_TEMPLATE.format(**template_vars)
 
         # Get AI analysis based on the constructed prompt
-        # Get AI analysis
-        response = model.generate_content(
-            prompt,
-            generation_config=GenerationConfig(
-                temperature=0.7,
-                top_p=0.8,
-                top_k=40
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=GenerationConfig(
+                    temperature=TEMPERATURE,
+                    top_p=0.8,
+                    top_k=40
+                )
             )
-        )
+        except Exception as e:
+            return {"error": f"Gemini model error: {str(e)}"}
 
         # Parse and validate response
         try:
@@ -965,7 +989,7 @@ def analyze_stock(symbol, asset_type='stock'):
     except Exception as e:
         return {"error": f"Error analyzing stock: {str(e)}"}
 
-def print_performance_summary(symbol, asset_type, timeframe='1d', days_back=50):
+def print_performance_summary(symbol, asset_type, timeframe=DEFAULT_TIMEFRAME, days_back=50):
     """
     Generate and display a comprehensive performance summary for a trading symbol.
     
@@ -1129,8 +1153,13 @@ def _get_market_data(symbol, asset_type, timeframe, days_back, max_retries=3):
             if asset_type == "crypto":
                 ohlcv = crypto_exchange.fetch_ohlcv(symbol, timeframe, limit=days_back)
                 return [candle[4] for candle in ohlcv], [candle[5] for candle in ohlcv]
-            else:  # Stock data from Alpaca
-                bars = api.get_barset(symbol, timeframe, limit=days_back)[symbol]
+            else:
+                # Stock data from Alpaca
+                bars = api.get_bars(symbol, timeframe, limit=days_back)
+                # Check for empty bars and handle gracefully
+                if not bars:
+                    logger.warning(f"No bars returned for {symbol} with timeframe {timeframe}. Skipping market data fetch.")
+                    return None, None
                 return [bar.c for bar in bars], [bar.v for bar in bars]
         except Exception as e:
             if attempt == max_retries - 1:
@@ -1146,7 +1175,10 @@ def _get_benchmark_data(asset_type, timeframe, days_back):
             ohlcv = crypto_exchange.fetch_ohlcv("BTC/USD", timeframe, limit=days_back)
             return [candle[4] for candle in ohlcv]
         else:
-            bars = api.get_barset("SPY", timeframe, limit=days_back)["SPY"]
+            bars = api.get_bars("SPY", timeframe, limit=days_back)
+            if not bars:
+                logger.warning(f"No bars returned for SPY with timeframe {timeframe}. Skipping benchmark data.")
+                return None
             return [bar.c for bar in bars]
     except Exception as e:
         logger.error(f"Failed to fetch benchmark data: {e}")
@@ -1242,29 +1274,36 @@ def run_trading_bot():
     
     while retry_count < max_retries:
         try:
+            logger.info("[run_trading_bot] Checking connections...")
             # Verify all API and database connections before starting
             if not agent.check_connections():
                 raise Exception("Failed to establish required connections")
-                
+            logger.info("[run_trading_bot] Connections OK. Entering trading loop.")
+            
             while True:
                 try:
+                    logger.info("[run_trading_bot] Starting trading cycle...")
                     # Step 1: Risk Management - Monitor existing positions
+                    logger.info("[run_trading_bot] Monitoring positions...")
                     agent.monitor_positions()
+                    logger.info("[run_trading_bot] Positions monitored.")
                     
                     # Step 2: Trading Analysis and Execution
+                    logger.info("[run_trading_bot] Running trading cycle...")
                     results = agent.run_trading_cycle(assets)
+                    logger.info(f"[run_trading_bot] Trading cycle complete. Results: {results}")
                     
                     # Step 3: Performance Reporting
                     for symbol, analysis in results:
                         if analysis and "error" not in analysis:
-                            # Generate performance summary for successful analyses
+                            logger.info(f"[run_trading_bot] Printing performance summary for {symbol}...")
                             print_performance_summary(symbol, 
                                 "crypto" if "ZUSD" in symbol else "stock")
                         else:
-                            # Log failed analyses for monitoring
                             logger.warning(f"Skipping analysis for {symbol}: {analysis.get('error', 'Unknown error')}")
                     
                     # Step 4: Portfolio Overview
+                    logger.info("[run_trading_bot] Printing portfolio summary...")
                     print_portfolio_summary()
                     try:
                         portfolio_metrics = portfolio.calculate_metrics()
@@ -1282,6 +1321,7 @@ def run_trading_bot():
                     # Reset retry counter after successful cycle
                     retry_count = 0
                     
+                    logger.info("[run_trading_bot] Sleeping for next trading cycle...")
                     # Wait for next trading cycle
                     time.sleep(TRADING_CYCLE_INTERVAL)
 
@@ -1310,9 +1350,6 @@ def run_trading_bot():
             else:
                 logger.critical("Maximum retry attempts reached, shutting down trading bot")
                 break
-
-if __name__ == "__main__":
-    run_trading_bot()
 
 def print_portfolio_summary():
     """
@@ -1380,13 +1417,17 @@ def print_portfolio_summary():
         
         # === Section 1: Overall Portfolio Performance ===
         try:
+            # Weekend/market closed check
+            import calendar
+            now = datetime.now()
+            if now.weekday() >= 5:
+                print(f"{Fore.YELLOW}⚠️ Note: Today is {calendar.day_name[now.weekday()]}. US stock markets are closed on weekends. Alpaca will not return bars for stocks until the next trading day.{Style.RESET_ALL}")
             portfolio_metrics = portfolio.calculate_metrics()
             current_value = float(portfolio.current_capital)
             initial_value = float(portfolio.initial_capital)
             total_return = float(portfolio_metrics.get('total_return', 0.0))
             total_pnl = current_value - initial_value
             
-            print(f"\n{Style.BRIGHT}📊 Overall Performance{Style.RESET_ALL}")
             print(f"└── Initial Capital: ${initial_value:,.2f}")
             print(f"└── Current Value: ${current_value:,.2f}")
             
@@ -1466,26 +1507,24 @@ def print_portfolio_summary():
                             risk_metrics = risk_manager.calculate_position_risk(pos_obj)
                             risk_color = Fore.RED if risk_metrics['risk_level'] == 'HIGH' else Fore.GREEN
                             print(f"    └── Risk: {risk_color}{risk_metrics['risk_level']}{Style.RESET_ALL}")
-                            
+                        
                         except Exception as pos_error:
                             print(f"    └── Error processing position: {pos_error}")
-                            
                 else:
                     print("└── No current stock positions")
-                    
             except Exception as api_error:
                 print(f"└── Error fetching positions: {api_error}")
                 logger.error(f"Failed to fetch Alpaca positions: {api_error}")
-            
-            # Show portfolio allocation
-            if total_position_value > 0:
-                cash_balance = current_value - total_position_value
-                investment_ratio = total_position_value / current_value
                 
-                print(f"\n{Style.BRIGHT}💰 Portfolio Allocation{Style.RESET_ALL}")
-                print(f"└── Invested: ${total_position_value:,.2f} ({investment_ratio:.1%})")
-                print(f"└── Cash: ${cash_balance:,.2f} ({(1-investment_ratio):.1%})")
-                
+                # Show portfolio allocation
+                if total_position_value > 0:
+                    cash_balance = current_value - total_position_value
+                    investment_ratio = total_position_value / current_value
+                    
+                    print(f"\n{Style.BRIGHT}💰 Portfolio Allocation{Style.RESET_ALL}")
+                    print(f"└── Invested: ${total_position_value:,.2f} ({investment_ratio:.1%})")
+                    print(f"└── Cash: ${cash_balance:,.2f} ({(1-investment_ratio):.1%})")
+                    
         except Exception as e:
             print(f"Error analyzing positions: {e}")
             logger.error(f"Position analysis failed: {e}")
@@ -1521,7 +1560,7 @@ def print_portfolio_summary():
             
             # Show which assets from TRADING_ASSETS we're tracking
             print("└── Configured Assets:")
-            for symbol, asset_type in TRADING_ASSETS:
+            for symbol, asset_type, _ in TRADING_ASSETS:
                 # Check if we have any historical data for this asset
                 try:
                     history = db.get_analysis_history(symbol)
@@ -1534,8 +1573,8 @@ def print_portfolio_summary():
                     print(f"    ├── {symbol} ({asset_type}): {Fore.RED}Error fetching data{Style.RESET_ALL}")
             
             # Show diversification
-            stock_count = sum(1 for _, asset_type in TRADING_ASSETS if asset_type == 'stock')
-            crypto_count = sum(1 for _, asset_type in TRADING_ASSETS if asset_type == 'crypto')
+            stock_count = sum(1 for _, asset_type, _ in TRADING_ASSETS if asset_type == 'stock')
+            crypto_count = sum(1 for _, asset_type, _ in TRADING_ASSETS if asset_type == 'crypto')
             
             print(f"└── Diversification:")
             print(f"    ├── Stocks: {stock_count} assets")
@@ -1602,3 +1641,10 @@ def print_portfolio_summary():
     except Exception as e:
         print(f"Error generating portfolio summary: {e}")
         logger.error(f"Portfolio summary error: {e}")
+
+if __name__ == "__main__":
+    from config import ENABLE_TRADING_BOT
+    if ENABLE_TRADING_BOT:
+        run_trading_bot()
+    else:
+        print("ENABLE_TRADING_BOT is False. Please run main.py for one-off analysis/report mode.")
