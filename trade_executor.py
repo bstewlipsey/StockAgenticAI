@@ -219,3 +219,88 @@ class TradeExecutor:
             self.logger.error(f"❌ Unexpected error getting account info: {str(e)}")
             self.logger.debug(f"Error details: {e}", exc_info=True)
             return None
+
+if __name__ == "__main__":
+    from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
+    from trade_executor import TradeExecutor
+    from trading_variables import TRADING_ASSETS
+    import time
+
+    # Set up TradeExecutor with API key and secret
+    executor = TradeExecutor(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper_trading=True)
+
+    # Force a test buy order for AAPL (1 share)
+    print("\n--- FORCING TEST BUY ORDER FOR AAPL ---")
+    success, response = executor.execute_trade(
+        symbol="AAPL",
+        side="buy",
+        quantity=1,
+        confidence=1.0  # Force high confidence
+    )
+    # Print result for AAPL test order
+    if success:
+        print(f"[AAPL] SUCCESS: Order placed. Order ID: {getattr(response, 'id', response)}")
+    else:
+        print(f"[AAPL] FAILED: {response}")
+
+    print("\n--- FORCED BUY TEST FOR ALL ASSETS ---")
+    # Loop through all assets in TRADING_ASSETS and attempt a test buy order for each
+    for symbol, asset_type, allocation_usd in TRADING_ASSETS:
+        try:
+            print(f"\n[{symbol}] Attempting test buy order ({asset_type})...")
+            # Use allocation_usd from the tuple; fallback to DEFAULT_TRADE_AMOUNT_USD if missing or zero
+            if not allocation_usd:
+                from trading_variables import DEFAULT_TRADE_AMOUNT_USD
+                allocation_usd = DEFAULT_TRADE_AMOUNT_USD
+            # === Get current price ===
+            if asset_type.lower() == 'crypto':
+                # For crypto, use Alpaca's get_crypto_latest_trade
+                price = float(executor.api.get_crypto_latest_trade(symbol.split('/')[0], symbol.split('/')[1]).price)
+            else:
+                # For stocks, use Alpaca's get_last_trade
+                price = float(executor.api.get_last_trade(symbol).price)
+            # === Calculate quantity based on allocation and price ===
+            qty = allocation_usd / price
+            if asset_type.lower() == 'crypto':
+                # Crypto: allow fractional qty, use 'gtc' time_in_force
+                order = {
+                    'symbol': symbol.upper(),
+                    'qty': round(qty, 6),  # 6 decimals for crypto
+                    'side': 'buy',
+                    'type': 'market',
+                    'time_in_force': 'gtc'
+                }
+                try:
+                    response = executor.api.submit_order(**order)
+                    print(f"[{symbol}] SUCCESS: Crypto order placed. Order ID: {getattr(response, 'id', response)} | Qty: {order['qty']} @ ${price:.2f} (USD Alloc: ${allocation_usd})")
+                except Exception as e:
+                    print(f"[{symbol}] FAILED: Crypto order error: {e}")
+            else:
+                # Stocks: round down to nearest whole share
+                qty = int(qty)
+                if qty < 1:
+                    print(f"[{symbol}] SKIPPED: Allocation (${allocation_usd}) too small for current price (${price:.2f})")
+                    continue
+                success, response = executor.execute_trade(
+                    symbol=symbol,
+                    side="buy",
+                    quantity=qty,
+                    confidence=1.0
+                )
+                if success:
+                    print(f"[{symbol}] SUCCESS: Stock order placed. Order ID: {getattr(response, 'id', response)} | Qty: {qty} @ ${price:.2f} (USD Alloc: ${allocation_usd})")
+                else:
+                    print(f"[{symbol}] FAILED: {response}")
+        except Exception as e:
+            print(f"[{symbol}] ERROR: Unexpected error: {e}")
+        time.sleep(1)  # Avoid rate limits
+    print("\n--- FORCED BUY TEST COMPLETE ---\n")
+
+# === OUTPUT EXPLANATION ===
+# Each order attempt prints a clear, labeled result:
+#   [SYMBOL] SUCCESS: ...   if the order was placed (shows order ID)
+#   [SYMBOL] FAILED: ...    if the order failed (shows error or None)
+#   [SYMBOL] ERROR: ...     for unexpected exceptions
+# Crypto orders use 'gtc' (good till canceled) as required by Alpaca, stocks use 'day'.
+# This makes it easy to see which trades succeeded or failed, and why, for each asset.
+# You can confirm all successful orders in your Alpaca dashboard.

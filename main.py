@@ -1,5 +1,5 @@
-from agent import TradingAgent, analyze_asset, print_performance_summary, print_portfolio_summary
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+from agent import TradingAgent, analyze_asset, print_performance_summary, print_portfolio_summary, run_trading_bot
+from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING, ENABLE_TRADING_BOT
 from trading_variables import TRADING_ASSETS
 import logging
 from colorama import init, Fore, Style
@@ -36,4 +36,7 @@ def main():
         logger.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    main()
+    if ENABLE_TRADING_BOT:
+        run_trading_bot()
+    else:
+        main()

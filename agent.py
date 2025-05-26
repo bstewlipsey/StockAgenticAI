@@ -193,7 +193,7 @@ class TradingAgent:
     
     def process_trading_signals(self, symbol, signals, indicators, current_price):
         """
-        Process trading signals and execute trades based on risk assessment and position sizing.
+        Process trading signals and execute trades based on risk assessment and per-asset USD allocation.
 
         Args:
             symbol (str): The trading symbol (e.g., 'AAPL', 'XXBTZUSD')
@@ -207,9 +207,9 @@ class TradingAgent:
         Strategy:
         1. For each signal:
             - Check if risk limits allow for a new position
-            - Calculate appropriate position size based on confidence
+            - Calculate position size based on per-asset allocation_usd (from TRADING_ASSETS)
             - Execute trade if conditions are met
-        2. Uses position sizing and risk management to protect capital
+        2. Uses risk management to protect capital
         3. Implements stop-loss and risk controls
         """
         if not signals:
@@ -222,6 +222,18 @@ class TradingAgent:
             'MACD': indicators.get('macd'),
             'SMA20': indicators.get('sma_20')
         }
+
+        # === Get allocation_usd for this symbol from TRADING_ASSETS ===
+        allocation_usd = None
+        asset_type = None
+        for asset in TRADING_ASSETS:
+            if asset[0] == symbol:
+                asset_type = asset[1]
+                allocation_usd = asset[2] if len(asset) > 2 else None
+                break
+        if allocation_usd is None or allocation_usd == 0:
+            from trading_variables import DEFAULT_TRADE_AMOUNT_USD
+            allocation_usd = DEFAULT_TRADE_AMOUNT_USD
 
         for signal, reason, confidence in signals:
             # Skip if confidence is below minimum threshold
@@ -260,7 +272,7 @@ class TradingAgent:
                 quantity=0,  # Hypothetical new position for risk check
                 entry_price=current_price,
                 current_price=current_price,
-                asset_type='stock' if 'ZUSD' not in symbol else 'crypto'
+                asset_type=asset_type if asset_type else ('stock' if 'ZUSD' not in symbol else 'crypto')
             ))
 
             # Skip trade if risk is too high
@@ -268,30 +280,30 @@ class TradingAgent:
                 logger.warning(f"Risk too high for {signal} on {symbol} - skipping trade")
                 continue
 
-            # Calculate position size using risk-adjusted sizing
-            quantity = self.sizer.calculate_position_size(
-                price=current_price,
-                confidence=confidence
-            )
-
-            if quantity <= 0:
-                logger.debug(f"Position size calculation yielded no tradeable quantity for {symbol}")
+            # === Calculate quantity based on allocation_usd and current price ===
+            qty = allocation_usd / current_price if current_price > 0 else 0
+            if asset_type == 'crypto':
+                qty = round(qty, 6)  # Allow fractional for crypto
+            else:
+                qty = int(qty)       # Whole shares for stocks
+            if qty <= 0:
+                logger.debug(f"Allocation (${allocation_usd}) too small for current price (${current_price:.2f}) on {symbol}")
                 continue
 
             # Execute the trade
             success, order = self.executor.execute_trade(
                 symbol=symbol,
                 side=signal,
-                quantity=quantity,
+                quantity=qty,
                 confidence=confidence
             )
             if success:
                 trades_executed = True
                 # Log basic trade info at INFO level
-                logger.info(f"Trade executed for {symbol}: {signal} {quantity} @ ${current_price:.2f}")
+                logger.info(f"Trade executed for {symbol}: {signal} {qty} @ ${current_price:.2f}")
                 # Log detailed analysis at DEBUG level
-                logger.debug(f"Trade details - Confidence: {confidence:.2f}, Indicators: {significant_indicators}")
-                print(f"Trade executed: {signal} {quantity} {symbol}")
+                logger.debug(f"Trade details - Confidence: {confidence:.2f}, Indicators: {significant_indicators}, Allocation: ${allocation_usd}")
+                print(f"Trade executed: {signal} {qty} {symbol} (USD Alloc: ${allocation_usd})")
 
         return trades_executed  # Return after processing all signals    
     

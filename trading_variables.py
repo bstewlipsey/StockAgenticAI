@@ -11,6 +11,27 @@ Think of these as the 'knobs and dials' that control how aggressive or conservat
 # This is a paper trading amount - no real money is used
 TOTAL_CAPITAL = 100000.0
 
+# === Assets to Trade & Per-Asset USD Allocation (Combined) ===
+# List each asset as a tuple: (symbol, type, allocation_usd)
+# - symbol: Asset symbol (e.g., 'AAPL', 'BTC/USD')
+# - type:   'stock' or 'crypto'
+# - allocation_usd: How much USD to spend per trade for this asset
+#
+# Example:
+#   ("AAPL", "stock", 500)      # Apple, $500 per trade
+#   ("BTC/USD", "crypto", 200)   # Bitcoin, $200 per trade
+#
+# To add or change an asset, just edit this list.
+TRADING_ASSETS = [
+    ("AAPL",    "stock", 500),   # Apple Inc.
+    ("GOOGL",   "stock", 500),   # Google (Alphabet)
+    ("NVDA",    "stock", 500),   # Nvidia
+    ("MSFT",    "stock", 500),   # Microsoft
+    ("BTC/USD", "crypto", 200)   # Bitcoin in USD
+]
+
+DEFAULT_TRADE_AMOUNT_USD = 500  # Fallback if allocation_usd is None or 0
+
 # Risk Management Settings - How much you're willing to risk
 # These are the most important settings for protecting your capital
 # Conservative values are used by default - adjust carefully!
@@ -26,26 +47,6 @@ CRYPTO_STOP_LOSS_PCT = 0.05   # Sell if a crypto trade loses 5% of its value (Ad
 # Higher = fewer but potentially better trades
 # Lower = more trades but potentially more risky ones
 MIN_CONFIDENCE = 0.7          # 70% confidence required for trades
-
-# === What to Trade ===
-# List of assets the bot will analyze and potentially trade
-# Format: (symbol, type)
-TRADING_ASSETS = [
-    ("AAPL", "stock"),        # Apple Inc.
-    ("MSFT", "stock"),        # Microsoft
-    ("XXBTZUSD", "crypto")    # Bitcoin in USD
-]
-
-# === Technical Analysis Settings ===
-# RSI (Relative Strength Index) Settings
-# These help identify if a stock is overbought or oversold
-RSI_OVERSOLD = 30            # Consider buying below this RSI value
-RSI_OVERBOUGHT = 70          # Consider selling above this RSI value
-
-# Moving Average Settings
-# How many days to look back when calculating average price
-# 20 is a common setting for short-term trading
-SMA_WINDOW = 20              # Short-term trend indicator
 
 # === AI Analysis Templates ===
 # Templates for generating prompts for the AI model
