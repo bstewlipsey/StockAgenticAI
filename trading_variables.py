@@ -48,6 +48,11 @@ CRYPTO_STOP_LOSS_PCT = 0.05   # Sell if a crypto trade loses 5% of its value (Ad
 # Lower = more trades but potentially more risky ones
 MIN_CONFIDENCE = 0.7          # 70% confidence required for trades
 
+# === Technical Indicator Thresholds ===
+RSI_OVERSOLD = 30      # RSI below this is considered oversold
+RSI_OVERBOUGHT = 70    # RSI above this is considered overbought
+SMA_WINDOW = 20        # Window for simple moving average (SMA)
+
 # === AI Analysis Templates ===
 # Templates for generating prompts for the AI model
 # These control how we ask the AI to analyze different types of assets
