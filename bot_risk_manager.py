@@ -1,6 +1,12 @@
+"""
+RiskManager & RiskBot: Position and portfolio risk analysis for trading systems.
+- Provides risk metrics, sizing, and risk flagging for positions and portfolios
+- Designed for integration with agentic and modular trading bots
+"""
+
 from dataclasses import dataclass
 from typing import Dict, List
-from trading_variables import MAX_PORTFOLIO_RISK, MAX_POSITION_RISK
+from config_trading_variables import MAX_PORTFOLIO_RISK, MAX_POSITION_RISK
 
 @dataclass
 class Position:
@@ -65,18 +71,23 @@ class RiskManager:
                 'current_value': 0.0,
                 'pnl': 0.0,
                 'pnl_percent': 0.0,
-                'risk_level': 'NONE'  # Not a valid position
+                'risk_level': 'NONE',
+                'max_loss': 0.0,
+                'profit_loss': 0.0
             }
         investment = position.quantity * position.entry_price
         current_value = position.quantity * position.current_price
         pnl = current_value - investment
         pnl_percent = (pnl / investment) if investment != 0 else 0
+        max_loss = abs(investment * self.max_position_risk)
         return {
             'investment': investment,           # Total amount invested in this position
             'current_value': current_value,     # Current market value of the position
             'pnl': pnl,                        # Profit or loss in dollars
             'pnl_percent': pnl_percent,         # Profit or loss as a percent of investment
-            'risk_level': 'HIGH' if abs(pnl_percent) > self.max_position_risk else 'LOW'  # Risk flag
+            'risk_level': 'HIGH' if abs(pnl_percent) > self.max_position_risk else 'LOW',  # Risk flag
+            'max_loss': max_loss,              # Maximum allowed loss for this position
+            'profit_loss': pnl                 # Alias for P&L for test compatibility
         }
 
     def calculate_portfolio_risk(self, positions: List[Position]) -> Dict:
@@ -135,3 +146,31 @@ class RiskManager:
         if shares <= 0:
             shares = 0
         return shares
+
+class RiskBot:
+    """
+    Bot wrapper for the RiskManager, providing a simple interface for risk analysis and sizing in trading bots.
+    """
+    def __init__(self, max_portfolio_risk=MAX_PORTFOLIO_RISK, max_position_risk=MAX_POSITION_RISK):
+        self.manager = RiskManager(max_portfolio_risk, max_position_risk)
+
+    def analyze_position(self, position: Position) -> Dict:
+        """Analyze risk for a single position."""
+        return self.manager.calculate_position_risk(position)
+
+    def analyze_portfolio(self, positions: List[Position]) -> Dict:
+        """Analyze risk for a list of positions (the portfolio)."""
+        return self.manager.calculate_portfolio_risk(positions)
+
+    def recommend_position_size(self, capital: float, price: float, risk_per_share: float, min_shares: int = 1, allow_fractional: bool = False) -> float:
+        """Recommend position size based on risk constraints."""
+        return self.manager.get_position_size(capital, price, risk_per_share, min_shares, allow_fractional)
+
+# === Usage Example ===
+if __name__ == "__main__":
+    # Example position
+    pos = Position(symbol="AAPL", quantity=10, entry_price=150, current_price=145, asset_type="stock")
+    risk_bot = RiskBot()
+    print("Single position risk:", risk_bot.analyze_position(pos))
+    print("Portfolio risk:", risk_bot.analyze_portfolio([pos]))
+    print("Recommended position size:", risk_bot.recommend_position_size(10000, 150, 5))

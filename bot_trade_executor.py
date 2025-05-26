@@ -1,34 +1,28 @@
+"""
+TradeExecutorBot: Modular trade execution for agentic trading systems.
+- Handles order validation, submission, and account/position management via Alpaca API
+- Supports both stocks and crypto, with robust error handling and logging
+- Designed for integration with other trading bots
+"""
+
 import logging
 import alpaca_trade_api as tradeapi
 from alpaca_trade_api.rest import URL
 from datetime import datetime
-from config import ALPACA_BASE_URL
+from config import ALPACA_BASE_URL, ALPACA_API_KEY, ALPACA_SECRET_KEY
 
-class TradeExecutor:
+class TradeExecutorBot:
     """
-    The TradeExecutor is responsible for actually placing buy and sell orders through the Alpaca API.
-    
-    This class acts as the bridge between trading decisions made by the AI agent and actual
-    market execution. It handles all the technical details of order placement, validation,
-    and error handling when communicating with the brokerage.
+    TradeExecutorBot is responsible for placing buy and sell orders through the Alpaca API in a modular, bot-style architecture.
     
     Key Responsibilities:
     - Connect to Alpaca API (paper trading or live trading)
     - Validate trade parameters before execution
-    - Submit market orders for stocks
+    - Submit market orders for stocks and crypto
     - Handle API errors and network issues gracefully
     - Provide account information for portfolio management
     - Log all trading activity for audit trails
-    
-    Safety Features:
-    - Input validation to prevent invalid orders
-    - Comprehensive error handling for API failures
-    - Support for paper trading (virtual money) for testing
-    - Detailed logging of all order attempts and results
-    
-    The executor uses market orders (immediate execution at current price) rather than
-    limit orders, prioritizing speed of execution over precise price control.
-    """    
+    """
     def __init__(self, api_key, api_secret, paper_trading=True):
         """
         Initialize the TradeExecutor with Alpaca API credentials and configuration.
@@ -124,15 +118,17 @@ class TradeExecutor:
                 
             # === ORDER CONSTRUCTION ===
             # Build the order object with all required parameters for Alpaca API
+            # Determine asset type for time_in_force
+            asset_type = 'crypto' if '/' in symbol else 'stock'
             order = {
                 'symbol': symbol.upper(),           # Stock ticker (ensure uppercase)
                 'qty': abs(float(quantity)),        # Number of shares (ensure positive)
                 'side': side.lower(),               # 'buy' or 'sell' 
                 'type': 'market',                   # Execute at current market price
-                'time_in_force': 'day'              # Order expires at end of trading day
+                'time_in_force': 'gtc' if asset_type == 'crypto' else 'day'  # Fix: 'gtc' for crypto, 'day' for stocks
             }
             
-            # Log the order attempt for audit purposes
+            # Log the order attempt for audit purposes (no emoji)
             self.logger.info(f"Attempting to place order: {order} (confidence: {confidence:.2f})")
             
             # === ORDER SUBMISSION ===
@@ -141,14 +137,14 @@ class TradeExecutor:
                 response = self.api.submit_order(**order)
                 
                 # Log successful order placement
-                self.logger.info(f"✅ Order placed successfully: {symbol} {side} {quantity} shares")
+                self.logger.info(f"Order placed successfully: {symbol} {side} {quantity} shares")
                 self.logger.debug(f"Order response: {response}")
                 
                 return True, response
                 
             except tradeapi.rest.APIError as api_error:
                 # Handle Alpaca-specific API errors (rate limits, invalid symbols, insufficient funds, etc.)
-                self.logger.error(f"❌ Alpaca API error for {symbol}: {api_error}")
+                self.logger.error(f"Alpaca API error for {symbol}: {api_error}")
                 
                 # Log specific error details for debugging
                 if hasattr(api_error, 'status_code'):
@@ -158,12 +154,12 @@ class TradeExecutor:
                 
         except ValueError as ve:
             # Handle validation errors (missing parameters, invalid values)
-            self.logger.error(f"❌ Order validation failed: {ve}")
+            self.logger.error(f"Order validation failed: {ve}")
             return False, None
             
         except Exception as e:
             # Handle any unexpected errors to prevent system crashes
-            self.logger.error(f"❌ Unexpected error executing trade for {symbol}: {str(e)}")
+            self.logger.error(f"Unexpected error executing trade for {symbol}: {str(e)}")
             self.logger.debug(f"Error details: {e}", exc_info=True)
             return False, None    
     
@@ -219,86 +215,70 @@ class TradeExecutor:
             self.logger.error(f"❌ Unexpected error getting account info: {str(e)}")
             self.logger.debug(f"Error details: {e}", exc_info=True)
             return None
-
-if __name__ == "__main__":
-    from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
-    from trade_executor import TradeExecutor
-    from trading_variables import TRADING_ASSETS
-    import time
-
-    # Set up TradeExecutor with API key and secret
-    executor = TradeExecutor(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper_trading=True)
-
-    # Force a test buy order for AAPL (1 share)
-    print("\n--- FORCING TEST BUY ORDER FOR AAPL ---")
-    success, response = executor.execute_trade(
-        symbol="AAPL",
-        side="buy",
-        quantity=1,
-        confidence=1.0  # Force high confidence
-    )
-    # Print result for AAPL test order
-    if success:
-        print(f"[AAPL] SUCCESS: Order placed. Order ID: {getattr(response, 'id', response)}")
-    else:
-        print(f"[AAPL] FAILED: {response}")
-
-    print("\n--- FORCED BUY TEST FOR ALL ASSETS ---")
-    # Loop through all assets in TRADING_ASSETS and attempt a test buy order for each
-    for symbol, asset_type, allocation_usd in TRADING_ASSETS:
+        
+    def get_open_positions(self, asset_type=None):
+        """
+        Retrieve all open positions from Alpaca. Optionally filter by asset_type ('stock' or 'crypto').
+        Returns a list of dicts: {symbol, entry_price, quantity, asset_type}
+        """
         try:
-            print(f"\n[{symbol}] Attempting test buy order ({asset_type})...")
-            # Use allocation_usd from the tuple; fallback to DEFAULT_TRADE_AMOUNT_USD if missing or zero
-            if not allocation_usd:
-                from trading_variables import DEFAULT_TRADE_AMOUNT_USD
-                allocation_usd = DEFAULT_TRADE_AMOUNT_USD            # === Get current price ===            if asset_type.lower() == 'crypto':
-                # For crypto, use Alpaca's get_crypto_snapshot (v2 API)
-                # Convert BTC/USD format to BTCUSD for Alpaca API
-                crypto_symbol = symbol.replace('/', '')
-                snapshot = executor.api.get_crypto_snapshot(crypto_symbol)
-                # Get the quote from the snapshot
-                quote = snapshot[crypto_symbol].latest_quote
-                price = float(quote.ap) if quote.ap else float(quote.bp)
-            else:
-                # For stocks, use Alpaca's get_latest_quote (v2 API)
-                quote = executor.api.get_latest_quote(symbol)
-                price = float(quote.ap) if quote.ap else float(quote.bp)
-            # === Calculate quantity based on allocation and price ===
-            qty = allocation_usd / price
-            if asset_type.lower() == 'crypto':
-                # Crypto: allow fractional qty, use 'gtc' time_in_force
-                order = {
-                    'symbol': symbol.upper(),
-                    'qty': round(qty, 6),  # 6 decimals for crypto
-                    'side': 'buy',
-                    'type': 'market',
-                    'time_in_force': 'gtc'
-                }
-                try:
-                    response = executor.api.submit_order(**order)
-                    print(f"[{symbol}] SUCCESS: Crypto order placed. Order ID: {getattr(response, 'id', response)} | Qty: {order['qty']} @ ${price:.2f} (USD Alloc: ${allocation_usd})")
-                except Exception as e:
-                    print(f"[{symbol}] FAILED: Crypto order error: {e}")
-            else:
-                # Stocks: round down to nearest whole share
-                qty = int(qty)
-                if qty < 1:
-                    print(f"[{symbol}] SKIPPED: Allocation (${allocation_usd}) too small for current price (${price:.2f})")
+            positions = self.api.list_positions()
+            open_positions = []
+            for pos in positions:
+                symbol = str(getattr(pos, 'symbol', ''))
+                qty = float(getattr(pos, 'qty', 0))
+                entry_price = float(getattr(pos, 'avg_entry_price', 0))
+                asset_class = str(getattr(pos, 'asset_class', '')).lower()
+                atype = 'crypto' if ('/' in symbol) or (asset_class == 'crypto') else 'stock'
+                if asset_type and atype != asset_type:
                     continue
-                success, response = executor.execute_trade(
-                    symbol=symbol,
-                    side="buy",
-                    quantity=qty,
-                    confidence=1.0
-                )
-                if success:
-                    print(f"[{symbol}] SUCCESS: Stock order placed. Order ID: {getattr(response, 'id', response)} | Qty: {qty} @ ${price:.2f} (USD Alloc: ${allocation_usd})")
-                else:
-                    print(f"[{symbol}] FAILED: {response}")
+                open_positions.append({
+                    'symbol': symbol,
+                    'entry_price': entry_price,
+                    'quantity': qty,
+                    'asset_type': atype
+                })
+            return open_positions
         except Exception as e:
-            print(f"[{symbol}] ERROR: Unexpected error: {e}")
-        time.sleep(1)  # Avoid rate limits
-    print("\n--- FORCED BUY TEST COMPLETE ---\n")
+            self.logger.error(f"Error fetching open positions: {e}")
+            return []
+
+    def close_position(self, symbol, quantity=None, asset_type=None):
+        """
+        Close an open position for the given symbol. If quantity is None, closes the full position.
+        Returns the API response or error message.
+        """
+        try:
+            # For crypto, Alpaca expects symbol as BTCUSD (no slash)
+            order_symbol = symbol.replace('/', '') if asset_type == 'crypto' else symbol
+            if quantity is None:
+                # Close full position
+                response = self.api.close_position(order_symbol)
+            else:
+                # Submit a sell order for the specified quantity
+                response = self.api.submit_order(
+                    symbol=order_symbol,
+                    qty=abs(float(quantity)),
+                    side='sell',
+                    type='market',
+                    time_in_force='gtc' if asset_type == 'crypto' else 'day'
+                )
+            self.logger.info(f"Closed position for {symbol}: {response}")
+            return response
+        except Exception as e:
+            self.logger.error(f"Error closing position for {symbol}: {e}")
+            return {"error": str(e)}
+
+# === Usage Example ===
+if __name__ == "__main__":
+    executor = TradeExecutorBot(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper_trading=True)
+    # Example: Place a test buy order for AAPL
+    success, response = executor.execute_trade(
+        symbol="AAPL", side="buy", quantity=1, confidence=1.0
+    )
+    print("AAPL order success:", success, "response:", response)
+    # Example: List open positions
+    print("Open positions:", executor.get_open_positions())
 
 # === OUTPUT EXPLANATION ===
 # Each order attempt prints a clear, labeled result:

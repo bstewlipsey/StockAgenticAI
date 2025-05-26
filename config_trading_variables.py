@@ -17,17 +17,13 @@ TOTAL_CAPITAL = 100000.0
 # - type:   'stock' or 'crypto'
 # - allocation_usd: How much USD to spend per trade for this asset
 #
-# Example:
-#   ("AAPL", "stock", 500)      # Apple, $500 per trade
-#   ("BTC/USD", "crypto", 200)   # Bitcoin, $200 per trade
-#
 # To add or change an asset, just edit this list.
 TRADING_ASSETS = [
-    ("AAPL",    "stock", 500),   # Apple Inc.
-    ("GOOGL",   "stock", 500),   # Google (Alphabet)
-    ("NVDA",    "stock", 500),   # Nvidia
-    ("MSFT",    "stock", 500),   # Microsoft
-    ("BTC/USD", "crypto", 200)   # Bitcoin in USD
+    ("AAPL",    "stock", 500),
+    ("GOOGL",   "stock", 500),
+    ("NVDA",    "stock", 500),
+    ("MSFT",    "stock", 500),
+    ("BTC/USD", "crypto", 200)   # Bitcoin in USD - universal symbol, let code map for each provider
 ]
 
 DEFAULT_TRADE_AMOUNT_USD = 500  # Fallback if allocation_usd is None or 0
@@ -47,6 +43,9 @@ CRYPTO_STOP_LOSS_PCT = 0.05   # Sell if a crypto trade loses 5% of its value (Ad
 # Higher = fewer but potentially better trades
 # Lower = more trades but potentially more risky ones
 MIN_CONFIDENCE = 0.7          # 70% confidence required for trades
+
+# Trading cycle interval - how often to run the trading loop (in seconds)
+TRADING_CYCLE_INTERVAL = 300  # 5 minutes between trading cycles (300 seconds)
 
 # === Technical Indicator Thresholds ===
 RSI_OVERSOLD = 30      # RSI below this is considered oversold
@@ -118,3 +117,15 @@ Current Value: ${current_value:.2f}
 P&L: {pnl:+.2f}%
 Risk Level: {risk_level}
 """
+
+# LLM prompt examples for timeframe selection
+LLM_TIMEFRAME_PROMPT_EXAMPLES = """
+- For Alpaca, 1 hour bars: '1H'
+- For Kraken, 1 hour bars: '1h'
+- For Alpaca, 1 day bars: '1D'
+- For Kraken, 1 day bars: '1d'
+- For Alpaca, 1 minute bars: '1Min'
+- For Kraken, 1 minute bars: '1m'
+"""
+
+# --- End of Configuration ---

@@ -1,27 +1,26 @@
-from trading_variables import TOTAL_CAPITAL, MAX_POSITION_SIZE
+"""
+PositionSizerBot: Position sizing logic for agentic trading systems.
+- Calculates optimal trade size based on capital, risk, confidence, and volatility
+- Supports both integer and fractional share brokers
+- Designed for modular integration with trading bots
+"""
 
-class PositionSizer:
+from config_trading_variables import TOTAL_CAPITAL, MAX_POSITION_SIZE
+
+class PositionSizerBot:
     """
-    The PositionSizer determines the optimal number of shares to buy or sell for each trade.
-
-    This class is responsible for translating AI trading signals and risk parameters into concrete
-    position sizes, ensuring that each trade is appropriately scaled for both opportunity and risk.
-    It supports advanced sizing logic including confidence weighting, volatility adjustment, and
-    available capital checks, making it a robust component for real-world trading systems.
-
-    Key Responsibilities:
+    PositionSizerBot determines the optimal number of shares to buy or sell for each trade in a modular, bot-style architecture.
+    
+    Responsibilities:
     - Calculate position size based on total capital and max position size constraints
     - Adjust position size according to AI confidence in the trade signal
     - Optionally reduce position size for high-volatility stocks (risk parity logic)
     - Enforce minimum shares per trade and support fractional shares if needed
     - Cap position size by available cash to prevent over-allocation
     - Provide clear, auditable sizing logic for risk management and compliance
-
-    Safety Features:
-    - Prevents negative or zero share trades
-    - Avoids over-allocation by checking available cash
-    - Supports both integer and fractional share brokers
-    - All logic is fully documented for transparency
+    - Prevent negative or zero share trades
+    - Avoid over-allocation by checking available cash
+    - Support both integer and fractional share brokers
     """
     def __init__(self, total_capital=TOTAL_CAPITAL, max_position_size=MAX_POSITION_SIZE):
         """
@@ -92,3 +91,9 @@ class PositionSizer:
         if shares <= 0:
             shares = 0
         return shares
+
+# === Usage Example ===
+if __name__ == "__main__":
+    sizer = PositionSizerBot(total_capital=10000, max_position_size=0.02)
+    # Calculate position size for a $100 stock, 90% confidence, low volatility
+    print("Shares to buy:", sizer.calculate_position_size(price=100, confidence=0.9, volatility=0.05, available_cash=500, min_shares=1, allow_fractional=False))

@@ -1,0 +1,121 @@
+# === Agentic Stock AI - Modular TODO List ===
+
+# --- I. Core Orchestration & Agent Workflow ---
+# Purpose: Define the main control flow, inter-bot communication, and overall system operation.
+# Location: Primarily in `main.py` (the `trading_loop`) or potentially a new `bot_orchestrator.py`.
+
+1.  **Task: Design and Implement the Main Trading Loop/Orchestrator.**
+    *   Action: Define the sequence in which specialized bots are called (e.g., Risk Assessment -> AI Adaptation -> Asset Analysis -> Decision Making -> Sizing -> Pre-Trade Risk -> Execution -> Portfolio Update).
+    *   Action: Manage the flow of data (e.g., analysis results, trade decisions, portfolio state) between bots.
+    *   Action: Implement top-level error handling and recovery mechanisms for the trading loop.
+    *   Action: Handle system-wide configurations and scheduling (e.g., `TRADING_CYCLE_INTERVAL`).
+
+# --- II. Develop/Enhance Specialized Bots ---
+# Guideline: If a distinct piece of functionality can be isolated, create a new bot for it.
+
+2.  **File: `bot_decision_maker.py` (New Bot: `DecisionMakerBot`)**
+    *   Purpose: Centralizes the logic for making the final trade call based on various inputs.
+    *   Task: Receive analysis data from `StockBot`, `CryptoBot`, and `AIBot`.
+    *   Task: Apply the dynamically adapted `min_confidence` (from `AIBot.adapt_with_performance`).
+    *   Task: Incorporate any other strategic rules or filters (e.g., market sentiment if available).
+    *   Task: Output a clear, actionable decision for each asset: 'buy', 'sell', or 'hold', along with the rationale.
+
+3.  **File: `bot_position_sizer.py` (`PositionSizerBot` - Exists, ensure robust integration)**
+    *   Purpose: Calculates the appropriate size for a trade.
+    *   Task: Integrate with `DecisionMakerBot`'s output (action, confidence) and `PortfolioBot`'s `available_cash` / `current_capital`.
+    *   Task: Use per-asset allocation from `config_trading_variables.TRADING_ASSETS`.
+    *   Task: Consider inputs like current price, AI confidence, and optionally, volatility (which might come from `IndicatorBot` or be calculated within `PositionSizerBot`).
+
+4.  **File: `bot_risk_manager.py` (`RiskManager` - Exists, ensure full integration into the loop)**
+    *   Purpose: Assesses and helps control trading risk.
+    *   Task: Implement pre-trade risk checks:
+        *   Called by the orchestrator after `PositionSizerBot` determines a potential trade size.
+        *   Uses `calculate_position_risk()` on the proposed trade.
+        *   Orchestrator acts if `MAX_POSITION_RISK` is exceeded (e.g., abort trade, reduce size).
+    *   Task: Implement portfolio-level risk checks:
+        *   Called by the orchestrator at the start of each trading cycle.
+        *   Uses `calculate_portfolio_risk()` based on all open positions from `PortfolioBot`.
+        *   Orchestrator acts if `MAX_PORTFOLIO_RISK` is exceeded (e.g., halt new trades, make AI more conservative).
+
+5.  **File: `bot_trade_executor.py` (`TradeExecutorBot` - Exists, ensure robust integration)**
+    *   Purpose: Handles the actual placement of orders with the broker.
+    *   Task: Execute trades based on confirmed decisions from `DecisionMakerBot` and `PositionSizerBot` (after passing risk checks).
+    *   Task: Ensure it correctly handles different `time_in_force` for stocks vs. crypto.
+    *   Task: Return detailed execution status to the orchestrator for `PortfolioBot` updates.
+
+6.  **File: `bot_portfolio.py` (`PortfolioBot` - Exists, ensure accurate and timely updates)**
+    *   Purpose: Tracks all aspects of the trading portfolio.
+    *   Task: Accurately update open positions, `current_capital`, and `trades` history based on actual fill information from `TradeExecutorBot`.
+    *   Task: Provide clean and up-to-date `trade_history` and performance metrics (like `win_rate`) for `AIBot` and the new `ReflectionBot`.
+
+7.  **File: `bot_ai.py` (`AIBot` - Exists, focus on enhancing its learning and RAG capabilities)**
+    *   Purpose: The core LLM interaction agent.
+    *   Task: Refine `adapt_with_performance` to use fresh data from `PortfolioBot` each cycle.
+    *   Task: Be prepared to handle more complex prompt structures if other bots (like `ReflectionBot` or a potential `AssetScreenerBot`) require specialized LLM reasoning.
+
+8.  **Files: `bot_stock.py` (`StockBot`) & `bot_crypto.py` (`CryptoBot`) - (Exist, focus on deeper RAG)**
+    *   Purpose: Asset-specific data gathering and initial analysis preparation.
+    *   Task: Implement RAG with Historical AI Analysis:
+        *   Before calling `AIBot.generate_analysis`, query `DatabaseBot.get_analysis_history(symbol)` for the specific asset.
+        *   Format a summary of recent AI signals and confidence levels for that asset.
+        *   Include this summary in the `prompt_note` or directly into the analysis template to give the LLM context of its own past "thoughts" on that asset.
+
+9.  **File: `bot_database.py` (`DatabaseBot` - Exists, extend schema if needed)**
+    *   Purpose: Persistent storage for analyses, trades, and learning data.
+    *   Task: If `ReflectionBot` is implemented, extend the database schema (or add a new table) to store LLM-generated reflections, insights, and any associated metadata (e.g., related trade ID, symbol).
+
+10. **File: `bot_reflection.py` (New Bot: `ReflectionBot` or `LearningOptimizerBot`)**
+    *   Purpose: Enables the system to learn from past trade outcomes at a deeper level.
+    *   Task: Be triggered by the orchestrator after a trade is closed (information from `PortfolioBot`).
+    *   Task: Formulate "Post-Mortem" prompts for `AIBot`. These prompts should include:
+        *   Details of the original AI analysis.
+        *   Entry/exit prices, P&L.
+        *   Market conditions at entry/exit (potentially from `IndicatorBot` data stored at the time of analysis).
+        *   Ask the LLM for insights, what could have been done differently, or adjustments for future analyses of that asset.
+    *   Task: Store the LLM's reflective insights in `DatabaseBot`.
+    *   Task: Develop a mechanism to feed these specific, asset-related insights back into future `AIBot` prompts (e.g., by adding them to the `prompt_note` when `StockBot`/`CryptoBot` analyze that asset again).
+
+11. **File: `bot_backtester.py` (New Bot: `BacktesterBot`) or Script: `run_backtest.py`**
+    *   Purpose: Test trading strategies and AI effectiveness on historical data.
+    *   Task: Design `BacktesterBot` to simulate the main trading loop (`OrchestratorBot`'s logic).
+    *   Task: Adapt `StockBot`, `CryptoBot`, `IndicatorBot` to consume historical price data (e.g., from CSVs or fetched via API for past periods) instead of live data.
+    *   Task: `BacktesterBot` will use these adapted bots to generate signals, make decisions (using `DecisionMakerBot`), size positions (`PositionSizerBot`), and simulate trades by updating a `PortfolioBot` instance.
+    *   Task: Track and report comprehensive performance metrics over the backtest period.
+
+12. **File: `bot_asset_screener.py` (Optional New Bot: `AssetScreenerBot` or `MarketScannerBot`)**
+    *   Purpose: Dynamically identify the most promising assets to analyze in each cycle.
+    *   Task: Instead of iterating through all `TRADING_ASSETS` statically, this bot would select a subset.
+    *   Task: Could use `AIBot` with broad market overview prompts, or analyze market-wide data (e.g., sector performance, top movers, news sentiment) to prioritize assets.
+    *   Task: Output a list of symbols for the orchestrator to pass to `StockBot`/`CryptoBot`.
+
+# --- III. System-Wide Concerns & Best Practices ---
+# These are ongoing tasks and principles applicable across the project.
+
+13. **Task: Ensure Consistent State Management Across All Bots.**
+    *   Action: Carefully manage how data is passed between bots and how shared state (like `PortfolioBot`'s status) is updated and read to prevent inconsistencies.
+
+14. **Task: Implement Robust Error Handling Within Each Bot and the Orchestrator.**
+    *   Action: Each bot should handle its own specific errors gracefully (e.g., API errors, data parsing issues).
+    *   Action: The orchestrator should handle failures in bot calls, log them, and decide whether to skip an asset, retry, or halt a cycle.
+
+15. **Task: Continuously Expand Test Coverage.**
+    *   Action: Write/update unit tests for every new bot and for significant new functionality in existing bots.
+    *   Action: Develop integration tests that verify the correct workflow and data exchange between multiple interacting bots (e.g., `StockBot` -> `AIBot` -> `DecisionMakerBot` -> `PortfolioBot`).
+
+# --- IV. Test Coverage for New Bots & Features ---
+# Ensure all new and enhanced bots are covered by unit and integration tests.
+
+16. **Task: Expand Test Coverage for New Bots.**
+    *   File: `test_trading_bot.py`, `test_trading_system.py`, or new test files as needed.
+    *   Action: Write unit tests for `ReflectionBot` (bot_reflection.py):
+        *   Test post-mortem prompt generation, LLM insight storage, and feedback loop into AIBot prompts.
+    *   Action: Write unit tests for `AssetScreenerBot` (bot_asset_screener.py):
+        *   Test dynamic asset selection logic and output format.
+    *   Action: Write unit tests for `BacktesterBot` (bot_backtester.py):
+        *   Test historical simulation, integration with StockBot/CryptoBot, and performance metrics reporting.
+    *   Action: Write integration tests for orchestrator workflow:
+        *   Simulate a full cycle: StockBot/CryptoBot -> AIBot -> DecisionMakerBot -> PositionSizerBot -> RiskManager -> TradeExecutorBot -> PortfolioBot.
+        *   Ensure correct data flow, error handling, and state updates across all bots.
+    *   Action: Add regression tests for any bug fixes or new features in these bots.
+
+# --- End of TODO ---

@@ -1,8 +1,20 @@
+"""
+VisualizerBot: Charting, trend, and pattern visualization for trading systems.
+- Generates ASCII/Unicode price/volume charts and technical summaries
+- Detects trends and common chart patterns
+- Designed for modular integration with agentic trading bots
+"""
+
 import numpy as np
 from colorama import Fore, Style
 import pandas as pd
 
-class SignalVisualizer:
+class VisualizerBot:
+    """
+    VisualizerBot generates visual representations of trading signals, technical indicators, and price/volume charts for the agentic trading system.
+    - Modular bot for ASCII/Unicode charting, trend detection, and pattern recognition.
+    - Used by other bots and the orchestrator for reporting and diagnostics.
+    """
     def __init__(self, width=50, height=10):
         # Chart dimensions
         self.width = width
@@ -234,3 +246,12 @@ class SignalVisualizer:
         except Exception as e:
             print(f"Visualization error: {e}")
             return [], ["Error generating visualization"]
+
+# === Usage Example ===
+if __name__ == "__main__":
+    bot = VisualizerBot(width=40, height=8)
+    prices = [100, 102, 105, 103, 108, 110, 112, 111, 115, 117, 120]
+    volumes = [1000, 1200, 900, 1100, 1300, 1250, 1400, 1350, 1500, 1550, 1600]
+    chart, summary = bot.visualize_signals(prices, signals=None, indicators={'macd': 1, 'rsi': 65, 'sma_20': 110, 'has_signals': True}, volumes=volumes)
+    print("\n".join(chart))
+    print("\n".join(summary))
