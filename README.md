@@ -3,7 +3,7 @@
 ## Project Status
 
 **As of May 2025, StockAgenticAI is fully refactored, integrated, and tested.**
-- All configuration is centralized in `config.py` (system/API) and `config_trading.py` (strategy/bot).
+- All configuration is centralized in `config_system.py` and `config_trading.py` (system/API) (strategy/bot).
 - Core RAG (Retrieval-Augmented Generation) and inter-agent data structures are defined in `data_structures.py`.
 - NewsRetrieverBot is fully implemented and integrated, providing news context to the trading decision process.
 - All bots dynamically load their configuration from config files (no hardcoded strategy parameters).
@@ -33,8 +33,7 @@
      ```
 
 3. **Configure your API keys and settings:**
-   - Edit `config.py` and set your Alpaca, Gemini, NewsAPI, and other API keys as needed.
-   - Ensure your `.env` file contains `NEWS_API_KEY` for news retrieval features.
+   - Edit `config_system.py` and set your Alpaca, Gemini, NewsAPI, and other API keys as needed.
 
 4. **Run the trading bot:**
    ```powershell
@@ -49,18 +48,18 @@
 
 StockAgenticAI uses two main configuration files:
 
-- `config.py`: Controls system-level and API settings (API keys, trading mode, logging, timeframes, etc.).
+- `config_system.py`: Controls system-level and API settings (API keys, trading mode, logging, timeframes, etc.).
 - `config_trading.py`: Controls trading strategy, asset selection, risk management, and AI prompt templates.
 
 **Key Settings:**
-- `TEST_MODE_ENABLED` (in `config.py`):
+- `TEST_MODE_ENABLED` (in `config_system.py`):
   - `True` for rapid iteration and safe testing (paper trading, fast cycles).
   - `False` for realistic simulation or live trading.
 - `TRADING_CYCLE_INTERVAL` (in both configs):
   - Controls how often the bot checks for trades (in seconds).
 - `TRADING_ASSETS` (in `config_trading.py`):
   - List of assets and allocation per asset.
-- `ENABLE_TRADING_BOT` (in `config.py`):
+- `ENABLE_TRADING_BOT` (in `config_system.py`):
   - `False` disables live trading (safe for all tests).
   - `True` enables live trading (only after all validation is complete).
 
@@ -239,5 +238,19 @@ display_interactive_log_viewer('trading.log', filter_keywords=['TRADE_OUTCOME', 
 - If you see `AttributeError: 'VisualizerBot' object has no attribute 'display_interactive_log_viewer'`, it means you tried to call the log viewer as a method. Instead, import and call `display_interactive_log_viewer` directly as shown above. It is a standalone function, not a method of the VisualizerBot class.
 
 ---
+
+## Configuration File Best Practices
+- `config_system.py`: System/API config only. All variables are used by the system, logging, or AI prompt construction
+- `config_trading.py`: Trading/strategy config only. All variables are referenced by the trading system, bots, or tests.
+- If you add new variables, document them and ensure they are not duplicated across files.
+
+## Capturing All Output to Log
+To capture all output (stdout and stderr) to the log file while running the bot, use:
+
+```
+python main.py > trading.log 2>&1
+```
+
+This will help with debugging and long-term monitoring.
 
 **This setup ensures anyone can replicate your environment with minimal manual steps and maximum safety.**

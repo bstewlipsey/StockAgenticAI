@@ -22,7 +22,7 @@ from bot_ai import AIBot
 from data_structures import AssetScreeningResult
 from bot_database import DatabaseBot
 import config_trading as ctv
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
+from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
 from alpaca_trade_api import REST
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
 import time

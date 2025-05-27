@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 # Import bots and configuration
 from bot_ai import AIBot
 from bot_database import DatabaseBot
-from config_trading import ANALYSIS_SCHEMA, MIN_REFLECTION_PNL, MAX_REFLECTION_AGE_DAYS
+from config_system import ANALYSIS_SCHEMA
+from config_trading import MIN_REFLECTION_PNL, MAX_REFLECTION_AGE_DAYS
 
 logger = logging.getLogger(__name__)
 

@@ -16,7 +16,7 @@ from datetime import datetime
 import numpy as np
 import ccxt
 import google.generativeai as genai
-from config import (
+from config_system import (
     GEMINI_MODEL, PAPER_TRADING, ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, RATE_LIMIT_DELAY_SECONDS
 )
 from config_trading import TRADING_ASSETS, TOTAL_CAPITAL
@@ -45,7 +45,7 @@ def test_env():
 
 def test_config():
     try:
-        from config import GEMINI_MODEL, PAPER_TRADING
+        from config_system import GEMINI_MODEL, PAPER_TRADING
         from config_trading import TRADING_ASSETS, TOTAL_CAPITAL
         return True
     except Exception as e:
@@ -140,7 +140,7 @@ def test_ai_analysis():
 
 def test_test_mode_flag():
     try:
-        from config import TEST_MODE_ENABLED
+        from config_system import TEST_MODE_ENABLED
         assert isinstance(TEST_MODE_ENABLED, bool)
         print(f"TEST_MODE_ENABLED flag present: {TEST_MODE_ENABLED}")
         return True

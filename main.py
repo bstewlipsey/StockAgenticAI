@@ -6,7 +6,7 @@ from colorama import init, Style
 from bot_orchestrator import OrchestratorBot
 
 # Configuration imports
-from config import ENABLE_TRADING_BOT
+from config_system import ENABLE_TRADING_BOT
 
 def main():
     # Initialize colorama for Windows

@@ -59,7 +59,7 @@ class TradingSystemTester:
         self.risk_manager = RiskManager()
         # Import API keys for TradeExecutorBot
         try:
-            from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+            from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
             self.trade_executor = TradeExecutorBot(
                 api_key=ALPACA_API_KEY,
                 api_secret=ALPACA_SECRET_KEY,
@@ -123,7 +123,7 @@ class TradingSystemTester:
         logger.info("Testing config import...")
         
         try:
-            from config import (
+            from config_system import (
                 ALPACA_API_KEY, ALPACA_SECRET_KEY, GEMINI_API_KEY,
                 GEMINI_MODEL, PAPER_TRADING, TRADING_CYCLE_INTERVAL
             )
@@ -190,7 +190,7 @@ class TradingSystemTester:
         logger.info("Testing Alpaca API connection...")
         
         try:
-            from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
+            from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
             import alpaca_trade_api as tradeapi
             from alpaca_trade_api.rest import URL
 
@@ -225,7 +225,7 @@ class TradingSystemTester:
         
         try:
             import ccxt
-            from config import RATE_LIMIT_DELAY_SECONDS
+            from config_system import RATE_LIMIT_DELAY_SECONDS
             
             exchange = ccxt.kraken({
                 'enableRateLimit': True,
@@ -252,7 +252,7 @@ class TradingSystemTester:
         
         try:
             import google.generativeai as genai
-            from config import GEMINI_API_KEY, GEMINI_MODEL
+            from config_system import GEMINI_API_KEY, GEMINI_MODEL
             
             genai.configure(api_key=GEMINI_API_KEY)
             model = genai.GenerativeModel(GEMINI_MODEL)
@@ -349,7 +349,7 @@ class TradingSystemTester:
         logger.info("Testing trade executor...")
         
         try:
-            from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+            from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
             executor = TradeExecutorBot(
                 api_key=ALPACA_API_KEY,
                 api_secret=ALPACA_SECRET_KEY,

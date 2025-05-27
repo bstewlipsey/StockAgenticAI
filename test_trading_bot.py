@@ -25,7 +25,7 @@ from datetime import datetime
 import google.generativeai as genai
 import alpaca_trade_api as tradeapi
 import ccxt
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
+from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
 from config_trading import TRADING_ASSETS
 from bot_database import DatabaseBot
 from bot_indicators import IndicatorBot
@@ -39,7 +39,7 @@ from bot_backtester import BacktesterBot, BacktestConfig
 
 # --- API Key and Config Imports (moved to top for clarity) ---
 try:
-    from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
+    from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
 except Exception as e:
     print(f"Config import failed: {e}")
     sys.exit(1)

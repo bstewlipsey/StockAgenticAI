@@ -28,7 +28,7 @@ from bot_news_retriever import NewsRetrieverBot
 from data_structures import TradingDecision as CoreTradingDecision, ActionSignal, AssetAnalysisInput
 
 # Configuration imports
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY
+from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY
 from config_trading import (
     TRADING_ASSETS, MIN_CONFIDENCE, MAX_PORTFOLIO_RISK, 
     MAX_POSITION_RISK, TRADING_CYCLE_INTERVAL

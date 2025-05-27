@@ -11,7 +11,7 @@ import re
 import json
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
-from config import GEMINI_API_KEY, GEMINI_MODEL, TEMPERATURE, MAX_TOKENS, ANALYSIS_SCHEMA, CRYPTO_ANALYSIS_TEMPLATE, STOCK_ANALYSIS_TEMPLATE
+from config_system import GEMINI_API_KEY, GEMINI_MODEL, TEMPERATURE, MAX_TOKENS, ANALYSIS_SCHEMA, CRYPTO_ANALYSIS_TEMPLATE, STOCK_ANALYSIS_TEMPLATE
 
 # === Standalone AI Analysis Function ===
 def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=None):

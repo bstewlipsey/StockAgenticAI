@@ -9,7 +9,7 @@ import logging
 import alpaca_trade_api as tradeapi
 from alpaca_trade_api.rest import URL
 from datetime import datetime
-from config import ALPACA_BASE_URL, ALPACA_API_KEY, ALPACA_SECRET_KEY
+from config_system import ALPACA_BASE_URL, ALPACA_API_KEY, ALPACA_SECRET_KEY
 
 class TradeExecutorBot:
     """

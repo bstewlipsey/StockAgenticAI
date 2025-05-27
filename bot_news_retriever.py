@@ -4,7 +4,7 @@ NewsRetrieverBot: Retrieves and analyzes news for trading signals.
 import requests
 from typing import List, Optional, Dict, Any
 from data_structures import NewsArticle
-from config import NEWS_API_KEY
+from config_system import NEWS_API_KEY
 from bot_ai import AIBot
 
 class NewsRetrieverBot:

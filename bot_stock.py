@@ -12,13 +12,15 @@ StockBot: Stock-specific analysis and trading logic for agentic trading systems.
 import logging
 import time
 import re
-from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, PAPER_TRADING, DEFAULT_STOCK_TIMEFRAME
+from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, PAPER_TRADING, DEFAULT_STOCK_TIMEFRAME
 from alpaca_trade_api import REST
 from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
 from bot_indicators import IndicatorBot
 from bot_trade_executor import TradeExecutorBot
 from bot_risk_manager import RiskManager, Position
-from config_trading import TRADING_ASSETS, RSI_OVERSOLD, RSI_OVERBOUGHT, ANALYSIS_SCHEMA, STOCK_ANALYSIS_TEMPLATE
+from config_trading import TRADING_ASSETS, RSI_OVERSOLD, RSI_OVERBOUGHT
+from config_system import ANALYSIS_SCHEMA, STOCK_ANALYSIS_TEMPLATE
+
 from bot_ai import generate_ai_analysis
 from bot_database import DatabaseBot
 
