@@ -1,5 +1,16 @@
 # StockAgenticAI - Setup & Installation Guide
 
+## Project Status
+
+**As of May 2025, StockAgenticAI is fully refactored, integrated, and tested.**
+- All configuration is centralized in `config.py` (system/API) and `config_trading.py` (strategy/bot).
+- Core RAG (Retrieval-Augmented Generation) and inter-agent data structures are defined in `data_structures.py`.
+- NewsRetrieverBot is fully implemented and integrated, providing news context to the trading decision process.
+- All bots dynamically load their configuration from config files (no hardcoded strategy parameters).
+- All unit, integration, and regression tests pass.
+- Logging is ASCII-safe and all performance metrics are floats.
+- The system is ready for further refinement or deployment.
+
 ## Prerequisites
 - **Python 3.10** (recommended for compatibility)
 - **Windows users:** [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) (one-time install)
@@ -22,7 +33,8 @@
      ```
 
 3. **Configure your API keys and settings:**
-   - Edit `config.py` and set your Alpaca, Gemini, and other API keys.
+   - Edit `config.py` and set your Alpaca, Gemini, NewsAPI, and other API keys as needed.
+   - Ensure your `.env` file contains `NEWS_API_KEY` for news retrieval features.
 
 4. **Run the trading bot:**
    ```powershell

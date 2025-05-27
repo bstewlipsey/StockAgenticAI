@@ -3,4 +3,5 @@
 *.log
 __pycache__/
 .vscode/
-logs_db/
+trading_history.db
+trading.log

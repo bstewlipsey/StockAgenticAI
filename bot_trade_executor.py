@@ -101,6 +101,8 @@ class TradeExecutorBot:
         - Returns clear success/failure indicators
         - Handles network issues gracefully without crashing
         """
+        asset_type = 'crypto' if '/' in symbol else 'stock'
+        self.logger.info(f"[TradeExecutorBot] Received trade request: symbol={symbol}, side={side}, quantity={quantity}, confidence={confidence}, asset_type={asset_type}")
         try:
             # === INPUT VALIDATION ===
             # Ensure all required parameters are provided and valid
@@ -129,7 +131,7 @@ class TradeExecutorBot:
             }
             
             # Log the order attempt for audit purposes (no emoji)
-            self.logger.info(f"Attempting to place order: {order} (confidence: {confidence:.2f})")
+            self.logger.info(f"[TradeExecutorBot] Attempting to execute {side} order for {symbol} ({asset_type}): qty={quantity}, confidence={confidence}")
             
             # === ORDER SUBMISSION ===
             try:
@@ -137,20 +139,14 @@ class TradeExecutorBot:
                 response = self.api.submit_order(**order)
                 
                 # Log successful order placement
-                self.logger.info(f"Order placed successfully: {symbol} {side} {quantity} shares")
+                self.logger.info(f"[TradeExecutorBot] Order placed successfully: {symbol} {side} {quantity} ({asset_type})")
                 self.logger.debug(f"Order response: {response}")
                 
                 return True, response
                 
-            except tradeapi.rest.APIError as api_error:
-                # Handle Alpaca-specific API errors (rate limits, invalid symbols, insufficient funds, etc.)
-                self.logger.error(f"Alpaca API error for {symbol}: {api_error}")
-                
-                # Log specific error details for debugging
-                if hasattr(api_error, 'status_code'):
-                    self.logger.error(f"API Error Code: {api_error.status_code}")
-                
-                return False, None
+            except Exception as e:
+                self.logger.error(f"[TradeExecutorBot] Trade execution failed for {symbol} ({asset_type}): {e}")
+                return False, str(e)
                 
         except ValueError as ve:
             # Handle validation errors (missing parameters, invalid values)

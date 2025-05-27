@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 from datetime import datetime
 import pandas as pd
-from config_trading_variables import TOTAL_CAPITAL
+from config_trading import TOTAL_CAPITAL
 
 @dataclass
 class Trade:
@@ -93,11 +93,11 @@ class PortfolioBot:
         losing_trades = df[df['exit_price'] < df['entry_price']]
         return {
             'total_return': (self.current_capital - self.initial_capital) / self.initial_capital,
-            'win_rate': len(profitable_trades) / len(df) if len(df) > 0 else 0,
-            'avg_profit': profitable_trades['exit_price'].mean() if len(profitable_trades) > 0 else 0,
-            'avg_loss': losing_trades['exit_price'].mean() if len(losing_trades) > 0 else 0,
-            'largest_gain': df['exit_price'].max() - df['entry_price'].min() if len(df) > 0 else 0,
-            'largest_loss': df['exit_price'].min() - df['entry_price'].max() if len(df) > 0 else 0
+            'win_rate': float(len(profitable_trades)) / float(len(df)) if len(df) > 0 else 0.0,
+            'avg_profit': profitable_trades['exit_price'].mean() if len(profitable_trades) > 0 else 0.0,
+            'avg_loss': losing_trades['exit_price'].mean() if len(losing_trades) > 0 else 0.0,
+            'largest_gain': df['exit_price'].max() - df['entry_price'].min() if len(df) > 0 else 0.0,
+            'largest_loss': df['exit_price'].min() - df['entry_price'].max() if len(df) > 0 else 0.0
         }
 
     def get_portfolio_metrics(self) -> Dict:

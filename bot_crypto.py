@@ -11,7 +11,7 @@ import logging
 import time
 import ccxt
 from config import RATE_LIMIT_DELAY_SECONDS, MAX_RETRIES, RETRY_DELAY, ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING, DEFAULT_CRYPTO_TIMEFRAME
-from config_trading_variables import (
+from config_trading import (
     TRADING_ASSETS, CRYPTO_ANALYSIS_TEMPLATE, ANALYSIS_SCHEMA, RSI_OVERSOLD,
     DEFAULT_TRADE_AMOUNT_USD, MIN_CONFIDENCE, CRYPTO_STOP_LOSS_PCT
 )
@@ -36,46 +36,91 @@ class CryptoBot:
         self.executor = TradeExecutorBot(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper_trading=PAPER_TRADING)
         self.asset_type_map = {symbol: asset_type for symbol, asset_type, _ in TRADING_ASSETS}
 
-    def get_crypto_data(self, symbol):
+    def get_crypto_data(self, symbol, max_retries=5):
         """
         Fetch crypto data for a given symbol using ccxt or other exchange API.
         Returns a dict with price, volume, and other metrics, or None on failure.
         Uses DEFAULT_CRYPTO_TIMEFRAME from config.py for all OHLCV fetches.
+        Implements aggressive error handling, exponential backoff, and retry logic.
+        Logs rate limits, empty data, and network issues.
         """
-        try:
-            time.sleep(self.exchange.rateLimit / 1000)
-            if '/' not in symbol:
-                logger.warning(f"Invalid symbol format: {symbol}. Expected format: BASE/QUOTE (e.g., BTC/USD)")
+        logger = logging.getLogger(__name__)
+        retries = 0
+        delay = 2
+        while retries < max_retries:
+            try:
+                time.sleep(self.exchange.rateLimit / 1000)
+                if '/' not in symbol:
+                    logger.warning(f"Invalid symbol format: {symbol}. Expected format: BASE/QUOTE (e.g., BTC/USD)")
+                    return None
+                base, quote = symbol.split('/')
+                currency_mapping = {'BTC': 'XBT', 'DOGE': 'XDG', 'LUNA': 'LUNA2'}
+                base = currency_mapping.get(base, base)
+                if base and isinstance(base, str):
+                    base_prefix = 'X' if len(base) <= 4 and base.isalpha() else ''
+                else:
+                    base_prefix = ''
+                quote_prefix = 'Z' if quote in ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF'] else ''
+                kraken_symbol = f"{base_prefix}{base}{quote_prefix}{quote}"
+                try:
+                    # RateLimitExceeded must be checked before NetworkError
+                    try:
+                        ticker = self.exchange.fetch_ticker(kraken_symbol)
+                    except ccxt.RateLimitExceeded as rle:
+                        logger.warning(f"ccxt rate limit exceeded for {symbol}: {rle}")
+                        raise
+                    except ccxt.NetworkError as ne:
+                        logger.error(f"Network error fetching ticker for {symbol}: {ne}")
+                        raise
+                except Exception as e:
+                    logger.error(f"Unknown error fetching ticker for {symbol}: {e}")
+                    raise
+                tf_value, tf_unit = DEFAULT_CRYPTO_TIMEFRAME
+                timeframe = f"{tf_value}{tf_unit}"
+                try:
+                    try:
+                        ohlcv = self.exchange.fetch_ohlcv(kraken_symbol, timeframe, limit=2)
+                    except ccxt.RateLimitExceeded as rle:
+                        logger.warning(f"ccxt rate limit exceeded for OHLCV {symbol}: {rle}")
+                        raise
+                    except ccxt.NetworkError as ne:
+                        logger.error(f"Network error fetching OHLCV for {symbol}: {ne}")
+                        raise
+                except Exception as e:
+                    logger.error(f"Unknown error fetching OHLCV for {symbol}: {e}")
+                    raise
+                if not ticker or 'last' not in ticker:
+                    logger.warning(f"Empty or incomplete ticker data for {symbol}: {ticker}")
+                    raise ValueError("Empty ticker data")
+                if not ohlcv or len(ohlcv) == 0:
+                    logger.warning(f"Empty OHLCV data for {symbol}")
+                    raise ValueError("Empty OHLCV data")
+                return {
+                    'current_price': ticker['last'],
+                    'volume': ticker.get('quoteVolume', ticker.get('baseVolume', 0)),
+                    'price_change': ticker.get('percentage', 0),
+                    'high_24h': ticker.get('high'),
+                    'low_24h': ticker.get('low'),
+                    'yesterday_close': ohlcv[0][4] if len(ohlcv) > 1 else None
+                }
+            except ccxt.RateLimitExceeded:
+                wait_time = min(60, delay)
+                logger.warning(f"Rate limit hit for {symbol}, retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
+                time.sleep(wait_time)
+            except ccxt.NetworkError as ne:
+                wait_time = min(60, delay)
+                logger.error(f"Network error for {symbol}: {ne}. Retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
+                time.sleep(wait_time)
+            except ValueError as ve:
+                logger.error(f"Data error for {symbol}: {ve}. Not retrying.")
                 return None
-            base, quote = symbol.split('/')
-            currency_mapping = {'BTC': 'XBT', 'DOGE': 'XDG', 'LUNA': 'LUNA2'}
-            base = currency_mapping.get(base, base)
-            if base and isinstance(base, str):
-                base_prefix = 'X' if len(base) <= 4 and base.isalpha() else ''
-            else:
-                base_prefix = ''
-            quote_prefix = 'Z' if quote in ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF'] else ''
-            kraken_symbol = f"{base_prefix}{base}{quote_prefix}{quote}"
-            ticker = self.exchange.fetch_ticker(kraken_symbol)
-            # Use DEFAULT_CRYPTO_TIMEFRAME for ohlcv
-            tf_value, tf_unit = DEFAULT_CRYPTO_TIMEFRAME
-            timeframe = f"{tf_value}{tf_unit}"
-            ohlcv = self.exchange.fetch_ohlcv(kraken_symbol, timeframe, limit=2)
-            return {
-                'current_price': ticker['last'],
-                'volume': ticker.get('quoteVolume', ticker.get('baseVolume', 0)),
-                'price_change': ticker['percentage'],
-                'high_24h': ticker['high'],
-                'low_24h': ticker['low'],
-                'yesterday_close': ohlcv[0][4] if len(ohlcv) > 1 else None
-            }
-        except ccxt.RateLimitExceeded:
-            logger.warning(f"Rate limit hit for {symbol}, waiting 30 seconds...")
-            time.sleep(30)
-            return self.get_crypto_data(symbol)
-        except Exception as e:
-            logger.error(f"Error fetching crypto data: {e}")
-            return None
+            except Exception as e:
+                wait_time = min(60, delay)
+                logger.error(f"Unexpected error fetching crypto data for {symbol}: {e}. Retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
+                time.sleep(wait_time)
+            retries += 1
+        logger.error(f"Failed to fetch crypto data for {symbol} after {max_retries} retries.")
+        return None
 
     def analyze_crypto(self, symbol, prompt_note=None):
         """

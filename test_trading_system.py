@@ -30,6 +30,7 @@ from bot_ai import AIBot
 from bot_stock import StockBot
 from bot_crypto import CryptoBot
 from bot_position_sizer import PositionSizerBot
+from bot_news_retriever import NewsRetrieverBot
 
 # Add the current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -139,7 +140,7 @@ class TradingSystemTester:
         logger.info("Testing trading variables import...")
         
         try:
-            from config_trading_variables import (
+            from config_trading import (
                 TRADING_ASSETS, TOTAL_CAPITAL, MAX_PORTFOLIO_RISK,
                 MIN_CONFIDENCE, RSI_OVERSOLD, RSI_OVERBOUGHT
             )
@@ -440,6 +441,25 @@ class TradingSystemTester:
             logger.error(f"OrchestratorBot integration test failed: {e}")
             return False
     
+    def test_news_retriever_integration(self):
+        """Test NewsRetrieverBot integration in a trading cycle context."""
+        try:
+            news_bot = NewsRetrieverBot()
+            articles = news_bot.fetch_news("AAPL", max_results=2)
+            assert isinstance(articles, list)
+            if articles:
+                assert isinstance(articles[0], type(articles[0]))
+            chunks = news_bot.preprocess_and_chunk(articles, chunk_size=256)
+            embeddings = news_bot.generate_embeddings(chunks)
+            assert len(embeddings) == len(chunks)
+            summary = news_bot.augment_context_and_llm("AAPL stock news")
+            assert isinstance(summary, str)
+            logger.info(f"NewsRetrieverBot integration test summary: {summary[:100]}")
+            return True
+        except Exception as e:
+            logger.error(f"NewsRetrieverBot integration test failed: {e}")
+            return False
+    
     def print_summary(self):
         """Print test summary and results."""
         logger.info(f"\n{'='*60}")
@@ -486,6 +506,7 @@ def main():
         ("Asset Screener Bot", tester.test_asset_screener_bot),
         ("Backtester Bot", tester.test_backtester_bot),
         ("Orchestrator Bot Integration", tester.test_orchestrator_integration),
+        ("News Retriever Bot Integration", tester.test_news_retriever_integration),
     ]
     
     for test_name, test_function in tests:
@@ -498,5 +519,7 @@ def main():
     return tester.failed_tests == 0
 
 if __name__ == "__main__":
+    tester = TradingSystemTester()
+    tester.run_test("NewsRetrieverBot Integration", tester.test_news_retriever_integration)
     success = main()
     sys.exit(0 if success else 1)

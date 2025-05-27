@@ -124,4 +124,28 @@ class AIBot:
             prompt_note = ""
         return new_confidence, prompt_note
 
+    def generate_embedding(self, text: str) -> list:
+        """Generate an embedding for the given text using the LLM (stub for now)."""
+        # TODO: Replace with real embedding model or API
+        import numpy as np
+        np.random.seed(abs(hash(text)) % (2**32))
+        return (np.random.rand(384) - 0.5).tolist()  # Example: 384-dim random vector
+
+    @staticmethod
+    def parse_ai_analysis_response(response):
+        # Ensure the response is a dict and contains 'action'
+        import logging
+        logger = logging.getLogger(__name__)
+        if not isinstance(response, dict):
+            logger.warning("AI analysis response is not a dict. Returning default hold action.")
+            return {'action': 'hold', 'confidence': 0.0, 'reasoning': 'Malformed AI response.'}
+        if 'action' not in response:
+            logger.warning(f"AI analysis response missing 'action' key: {response}")
+            response['action'] = 'hold'
+        if 'confidence' not in response:
+            response['confidence'] = 0.0
+        if 'reasoning' not in response:
+            response['reasoning'] = 'No reasoning provided.'
+        return response
+
 # === End of bot_ai.py ===

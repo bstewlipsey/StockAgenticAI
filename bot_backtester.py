@@ -27,7 +27,7 @@ from bot_risk_manager import RiskManager, Position
 from bot_database import DatabaseBot
 
 # Configuration
-from config_trading_variables import TRADING_ASSETS
+from config_trading import TRADING_ASSETS
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class BacktesterBot:
     
     def __init__(self):
         """Initialize the BacktesterBot"""
-        logger.info("📊 Initializing BacktesterBot...")
+        logger.info("Initializing BacktesterBot...")
         
         # Initialize core components for backtesting
         self.stock_bot = StockBot()
@@ -90,7 +90,7 @@ class BacktesterBot:
         self.portfolio_snapshots = []
         self.daily_returns = []
         
-        logger.info("✅ BacktesterBot initialized successfully")
+        logger.info("BacktesterBot initialized successfully")
     
     def run_backtest(self, config: BacktestConfig) -> BacktestResult:
         """
@@ -102,7 +102,7 @@ class BacktesterBot:
         Returns:
             BacktestResult: Comprehensive backtest results
         """
-        logger.info(f"📊 Starting backtest from {config.start_date} to {config.end_date}")
+        logger.info(f"[INFO] Starting backtest from {config.start_date} to {config.end_date}")
         
         try:
             # === STEP 1: INITIALIZE BACKTEST ===
@@ -132,7 +132,7 @@ class BacktesterBot:
                 execution_summary=self._generate_execution_summary()
             )
             
-            logger.info(f"✅ Backtest completed. Total return: {performance_metrics.get('total_return', 0):.1f}%")
+            logger.info(f"[PASS] Backtest completed. Total return: {performance_metrics.get('total_return', 0):.1f}%")
             return results
             
         except Exception as e:
@@ -704,7 +704,7 @@ class BacktesterBot:
             # Trade statistics
             profitable_trades = len([t for t in self.backtest_trades if self._calculate_trade_pnl(t) > 0])
             total_trades = len(self.backtest_trades)
-            win_rate = (profitable_trades / total_trades * 100) if total_trades > 0 else 0
+            win_rate = float(profitable_trades) / float(total_trades) * 100 if total_trades > 0 else 0.0
             
             return {
                 'total_return': total_return,
@@ -724,14 +724,36 @@ class BacktesterBot:
             return {}
     
     def _calculate_trade_pnl(self, trade: Dict[str, Any]) -> float:
-        """Calculate P&L for a completed trade (simplified)"""
-        # This is a simplified calculation - in practice, would need to track entry/exit pairs
-        return 0.0  # Placeholder
-    
+        """Calculate P&L for a completed trade (buy/sell pair)"""
+        # For this simulation, assume each trade record is a round-trip (buy then sell)
+        # If not, this should be paired by symbol and action
+        if trade['action'] == 'sell':
+            # Find the matching buy trade
+            buy_trades = [t for t in self.backtest_trades if t['symbol'] == trade['symbol'] and t['action'] == 'buy' and t['date'] < trade['date']]
+            if buy_trades:
+                entry_trade = buy_trades[-1]
+                pnl = (trade['price'] - entry_trade['price']) * trade['shares'] - (trade['commission'] + entry_trade['commission'])
+                return pnl
+        return 0.0
+
     def _analyze_drawdowns(self) -> Dict[str, Any]:
         """Analyze portfolio drawdowns"""
-        # Implementation for drawdown analysis
-        return {'max_drawdown_duration': 0, 'avg_drawdown': 0}
+        if not self.portfolio_snapshots:
+            return {'max_drawdown': 0, 'max_drawdown_duration': 0, 'avg_drawdown': 0}
+        portfolio_values = [s['total_value'] for s in self.portfolio_snapshots]
+        running_max = np.maximum.accumulate(portfolio_values)
+        drawdowns = (np.array(portfolio_values) - running_max) / running_max
+        max_drawdown = np.min(drawdowns)
+        # Drawdown duration
+        end = np.argmin(drawdowns)
+        start = np.argmax(portfolio_values[:end+1])
+        max_drawdown_duration = end - start
+        avg_drawdown = np.mean(drawdowns)
+        return {
+            'max_drawdown': max_drawdown * 100,
+            'max_drawdown_duration': max_drawdown_duration,
+            'avg_drawdown': avg_drawdown * 100
+        }
     
     def _calculate_risk_metrics(self, config: BacktestConfig) -> Dict[str, Any]:
         """Calculate comprehensive risk metrics"""

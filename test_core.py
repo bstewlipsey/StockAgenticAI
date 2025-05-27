@@ -19,7 +19,7 @@ import google.generativeai as genai
 from config import (
     GEMINI_MODEL, PAPER_TRADING, ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, RATE_LIMIT_DELAY_SECONDS
 )
-from config_trading_variables import TRADING_ASSETS, TOTAL_CAPITAL
+from config_trading import TRADING_ASSETS, TOTAL_CAPITAL
 from alpaca_trade_api.rest import URL
 import alpaca_trade_api as tradeapi
 from bot_database import DatabaseBot
@@ -45,7 +45,7 @@ def test_env():
 def test_config():
     try:
         from config import GEMINI_MODEL, PAPER_TRADING
-        from config_trading_variables import TRADING_ASSETS, TOTAL_CAPITAL
+        from config_trading import TRADING_ASSETS, TOTAL_CAPITAL
         return True
     except Exception as e:
         logger.error(f"Config import: {e}"); return False

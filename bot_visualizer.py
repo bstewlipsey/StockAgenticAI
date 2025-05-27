@@ -8,6 +8,9 @@ VisualizerBot: Charting, trend, and pattern visualization for trading systems.
 import numpy as np
 from colorama import Fore, Style
 import pandas as pd
+import time
+import os
+import re
 
 class VisualizerBot:
     """
@@ -247,6 +250,39 @@ class VisualizerBot:
             print(f"Visualization error: {e}")
             return [], ["Error generating visualization"]
 
+def tail_log(log_path, alert_config):
+    print(f"[LogMonitor] Monitoring {log_path} for real-time events...")
+    if not os.path.exists(log_path):
+        print(f"[LogMonitor] Log file not found: {log_path}")
+        return
+    with open(log_path, 'r') as f:
+        f.seek(0, os.SEEK_END)
+        no_trade_cycles = 0
+        failure_count = 0
+        while True:
+            line = f.readline()
+            if not line:
+                time.sleep(1)
+                continue
+            print(line, end='')
+            # --- Alerts ---
+            if alert_config['no_trade_pattern'] in line:
+                no_trade_cycles += 1
+                if no_trade_cycles >= alert_config['no_trade_cycles']:
+                    print(f"[ALERT] No trades for {no_trade_cycles} consecutive cycles!")
+            else:
+                no_trade_cycles = 0
+            if alert_config['failure_pattern'] in line:
+                failure_count += 1
+                if failure_count >= alert_config['failure_threshold']:
+                    print(f"[ALERT] {failure_count} trade execution failures detected!")
+            else:
+                failure_count = 0
+            if alert_config['rate_limit_pattern'] in line:
+                print(f"[ALERT] API rate limit or data fetching error detected!")
+            if alert_config['drawdown_pattern'] in line:
+                print(f"[ALERT] Significant portfolio drawdown detected!")
+
 # === Usage Example ===
 if __name__ == "__main__":
     bot = VisualizerBot(width=40, height=8)
@@ -255,3 +291,12 @@ if __name__ == "__main__":
     chart, summary = bot.visualize_signals(prices, signals=None, indicators={'macd': 1, 'rsi': 65, 'sma_20': 110, 'has_signals': True}, volumes=volumes)
     print("\n".join(chart))
     print("\n".join(summary))
+    alert_config = {
+        'no_trade_pattern': 'No trades executed',
+        'no_trade_cycles': 3,
+        'failure_pattern': 'Trade execution failed',
+        'failure_threshold': 2,
+        'rate_limit_pattern': 'rate limit',
+        'drawdown_pattern': 'drawdown',
+    }
+    tail_log('trading.log', alert_config)

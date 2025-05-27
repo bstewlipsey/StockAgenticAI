@@ -18,8 +18,9 @@ from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
 from bot_indicators import IndicatorBot
 from bot_trade_executor import TradeExecutorBot
 from bot_risk_manager import RiskManager, Position
-from config_trading_variables import TRADING_ASSETS, RSI_OVERSOLD, RSI_OVERBOUGHT, ANALYSIS_SCHEMA, STOCK_ANALYSIS_TEMPLATE
+from config_trading import TRADING_ASSETS, RSI_OVERSOLD, RSI_OVERBOUGHT, ANALYSIS_SCHEMA, STOCK_ANALYSIS_TEMPLATE
 from bot_ai import generate_ai_analysis
+from bot_database import DatabaseBot
 
             
 
@@ -37,6 +38,7 @@ class StockBot:
         self.risk_manager = RiskManager()
         self.asset_type_map = {symbol: asset_type for symbol, asset_type, _ in TRADING_ASSETS}
         self.tf_value, self.tf_unit = DEFAULT_STOCK_TIMEFRAME  
+        self.database_bot = DatabaseBot()
         
     def get_current_price(self, symbol):
         for _ in range(3):
@@ -127,9 +129,23 @@ class StockBot:
                 'market_change': market_change,
                 'signal_summary': signal_summary
             }
+            # === RAG: Retrieve historical AI context and reflection insights ===
+            historical_context = self.database_bot.get_analysis_history(symbol)
+            reflection_insights = self.database_bot.get_reflection_insights(symbol)
+            rag_note = ''
+            if historical_context:
+                rag_note += '\nRecent AI decisions:'
+                for row in historical_context[:5]:
+                    rag_note += f"\n- {row[1]}: {row[3].upper()} (confidence: {row[4]:.2f})"
+            if reflection_insights:
+                rag_note += '\nRecent Reflection Insights:'
+                for insight in reflection_insights[:3]:
+                    rag_note += f"\n- {insight['timestamp']}: {insight['key_insights']}"
+            # Combine prompt_note and RAG note
+            full_prompt_note = (prompt_note or '') + rag_note
             # Generate prompt using template
-            if prompt_note:
-                prompt = STOCK_ANALYSIS_TEMPLATE + f"\n{prompt_note}"
+            if full_prompt_note:
+                prompt = STOCK_ANALYSIS_TEMPLATE + f"\n{full_prompt_note}"
             else:
                 prompt = STOCK_ANALYSIS_TEMPLATE
             response = generate_ai_analysis(prompt, variables=template_vars)

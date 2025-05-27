@@ -12,6 +12,9 @@ ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 PAPER_TRADING = os.getenv('PAPER_TRADING', 'True').lower() == 'true'
 
+# Add your News API key here for NewsRetrieverBot
+NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+
 # Determine Alpaca API base URL based on paper trading status
 if PAPER_TRADING:
     ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Alpaca paper trading endpoint

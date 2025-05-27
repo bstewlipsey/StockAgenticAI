@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 # Import bots and configuration
 from bot_ai import AIBot
 from bot_database import DatabaseBot
-from config_trading_variables import ANALYSIS_SCHEMA
+from config_trading import ANALYSIS_SCHEMA, MIN_REFLECTION_PNL, MAX_REFLECTION_AGE_DAYS
 
 logger = logging.getLogger(__name__)
 
@@ -61,15 +61,15 @@ class ReflectionBot:
     
     def __init__(self):
         """Initialize the ReflectionBot"""
-        logger.info("🔄 Initializing ReflectionBot...")
+        logger.info("Initializing ReflectionBot...")
         
         # Initialize required bots
         self.ai_bot = AIBot()
         self.database_bot = DatabaseBot()
         
         # Reflection parameters
-        self.min_reflection_pnl = 0.02  # Only reflect on trades with >2% impact
-        self.max_reflection_age_days = 30  # Only reflect on trades within 30 days
+        self.min_reflection_pnl = MIN_REFLECTION_PNL  # Only reflect on trades with >2% impact
+        self.max_reflection_age_days = MAX_REFLECTION_AGE_DAYS  # Only reflect on trades within 30 days
         self.reflection_batch_size = 5  # Process 5 trades at a time
         
         # Insight categories
@@ -84,7 +84,7 @@ class ReflectionBot:
             'pattern_recognition': 'Recurring patterns identified'
         }
         
-        logger.info("✅ ReflectionBot initialized successfully")
+        logger.info("ReflectionBot initialized successfully")
     
     def analyze_completed_trade(self, trade_outcome: TradeOutcome) -> List[ReflectionInsight]:
         """
@@ -96,7 +96,7 @@ class ReflectionBot:
         Returns:
             List[ReflectionInsight]: Generated insights from the trade
         """
-        logger.info(f"🔄 Analyzing completed trade: {trade_outcome.symbol} (P&L: {trade_outcome.pnl_percent:.1f}%)")
+        logger.info(f"Analyzing completed trade: {trade_outcome.symbol} (P&L: {trade_outcome.pnl_percent:.1f}%)")
         
         insights = []
         
@@ -138,7 +138,7 @@ class ReflectionBot:
         Returns:
             List[ReflectionInsight]: All generated insights
         """
-        logger.info(f"🔄 Batch analyzing trades from last {days_back} days...")
+        logger.info(f"Batch analyzing trades from last {days_back} days...")
         
         all_insights = []
         

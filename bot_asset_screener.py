@@ -20,7 +20,7 @@ from datetime import datetime, timedelta
 import numpy as np
 from bot_ai import AIBot
 from bot_database import DatabaseBot
-import config_trading_variables as ctv
+import config_trading as ctv
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -354,6 +354,9 @@ class AssetScreenerBot:
             
             if hist_data.empty:
                 return None
+            
+            # Log the raw data fetched for the crypto symbol
+            self.logger.info(f"[AssetScreenerBot] Raw data for {symbol}: {hist_data.tail()}")
             
             # Calculate technical metrics
             current_price = hist_data['Close'].iloc[-1]

@@ -9,7 +9,7 @@ from ta.trend import SMAIndicator, EMAIndicator, MACD
 from ta.momentum import RSIIndicator
 from ta.volatility import BollingerBands
 from ta.volume import OnBalanceVolumeIndicator, AccDistIndexIndicator, VolumeWeightedAveragePrice
-from config_trading_variables import RSI_OVERSOLD, RSI_OVERBOUGHT, SMA_WINDOW
+from config_trading import RSI_OVERSOLD, RSI_OVERBOUGHT, SMA_WINDOW
 
 _indicator_cache = {}
 

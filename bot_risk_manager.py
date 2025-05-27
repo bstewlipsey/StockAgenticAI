@@ -6,7 +6,8 @@ RiskManager & RiskBot: Position and portfolio risk analysis for trading systems.
 
 from dataclasses import dataclass
 from typing import Dict, List
-from config_trading_variables import MAX_PORTFOLIO_RISK, MAX_POSITION_RISK
+from config_trading import MAX_PORTFOLIO_RISK, MAX_POSITION_RISK
+import logging
 
 @dataclass
 class Position:
@@ -52,6 +53,8 @@ class RiskManager:
         self.max_position_risk = max_position_risk    # From variables file
         
     def calculate_position_risk(self, position: Position) -> Dict:
+        logger = logging.getLogger(__name__)
+        logger.info(f"[RiskManager] Calculating risk for {position.symbol} ({position.asset_type}): qty={position.quantity}, entry={position.entry_price}, current={position.current_price}")
         """
         Calculate risk metrics for a single open position.
         Args:
@@ -66,6 +69,7 @@ class RiskManager:
         """
         # Defensive: Handle zero or negative quantity/price
         if position.quantity <= 0 or position.entry_price <= 0:
+            logger.warning(f"[RiskManager] Position {position.symbol} rejected: zero or negative quantity/entry price.")
             return {
                 'investment': 0.0,
                 'current_value': 0.0,
@@ -73,13 +77,16 @@ class RiskManager:
                 'pnl_percent': 0.0,
                 'risk_level': 'NONE',
                 'max_loss': 0.0,
-                'profit_loss': 0.0
+                'profit_loss': 0.0,
+                'rejection_reason': 'Zero or negative quantity/entry price.'
             }
         investment = position.quantity * position.entry_price
         current_value = position.quantity * position.current_price
         pnl = current_value - investment
         pnl_percent = (pnl / investment) if investment != 0 else 0
         max_loss = abs(investment * self.max_position_risk)
+        if abs(pnl_percent) > self.max_position_risk:
+            logger.warning(f"[RiskManager] {position.symbol} risk level HIGH: max position risk exceeded ({abs(pnl_percent):.4f} > {self.max_position_risk:.4f})")
         return {
             'investment': investment,           # Total amount invested in this position
             'current_value': current_value,     # Current market value of the position
@@ -91,6 +98,8 @@ class RiskManager:
         }
 
     def calculate_portfolio_risk(self, positions: List[Position]) -> Dict:
+        logger = logging.getLogger(__name__)
+        logger.info(f"[RiskManager] Calculating portfolio risk for {len(positions)} positions.")
         """
         Calculate total portfolio risk and exposure across all open positions.
         Args:

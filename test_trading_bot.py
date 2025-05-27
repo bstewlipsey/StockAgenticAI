@@ -26,19 +26,22 @@ import google.generativeai as genai
 import alpaca_trade_api as tradeapi
 import ccxt
 from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
-from config_trading_variables import TRADING_ASSETS
+from config_trading import TRADING_ASSETS
 from bot_database import DatabaseBot
 from bot_indicators import IndicatorBot
 from bot_risk_manager import RiskManager, Position
 from bot_portfolio import PortfolioBot
 from bot_trade_executor import TradeExecutorBot
 from bot_position_sizer import PositionSizerBot
+import unittest
+from datetime import datetime, timedelta
+from bot_backtester import BacktesterBot, BacktestConfig
 
 # --- API Key and Config Imports (moved to top for clarity) ---
 try:
     from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
 except Exception as e:
-    print(f"❌ Config import failed: {e}")
+    print(f"Config import failed: {e}")
     sys.exit(1)
 
 # --- Other Imports ---
@@ -47,18 +50,30 @@ try:
     from bot_risk_manager import RiskManager, Position
     from bot_trade_executor import TradeExecutorBot
     from bot_position_sizer import PositionSizerBot
-    from config_trading_variables import TRADING_ASSETS
+    from config_trading import TRADING_ASSETS
     import google.generativeai as genai
     import alpaca_trade_api as tradeapi
     import ccxt
-    print("✅ All imports successful")
+    print("All imports successful")
 except Exception as e:
-    print(f"❌ Import failed: {e}")
+    print(f"Import failed: {e}")
     sys.exit(1)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def safe_print(msg):
+    # Replace common emoji with ASCII
+    replacements = {
+        '✅': '[PASS]',
+        '❌': '[FAIL]',
+        '📊': '[INFO]',
+        '⚠️': '[WARN]',
+    }
+    for k, v in replacements.items():
+        msg = msg.replace(k, v)
+    print(msg)
 
 class TradingBotTester:
     def __init__(self):
@@ -68,7 +83,7 @@ class TradingBotTester:
         
     def run_all_tests(self):
         """Run all tests and return overall success status."""
-        print("\n🚀 Starting Trading Bot Comprehensive Test Suite")
+        print("\nStarting Trading Bot Comprehensive Test Suite")
         print("=" * 60)
         
         test_methods = [
@@ -79,19 +94,20 @@ class TradingBotTester:
             ("Portfolio Management", self.test_portfolio_management),
             ("Crypto Data Fetching", self.test_crypto_data),
             ("AI Analysis", self.test_ai_analysis),
-            ("Trade Execution", self.test_trade_execution)
+            ("Trade Execution", self.test_trade_execution),
+            ("Backtester Bot", self.test_backtester_bot)
         ]
         
         for test_name, test_method in test_methods:
-            print(f"\n📋 Testing: {test_name}")
+            print(f"\nTesting: {test_name}")
             try:
                 success = test_method()
                 self.results[test_name] = success
-                status = "✅ PASSED" if success else "❌ FAILED"
+                status = "[PASS]" if success else "[FAIL]"
                 print(f"   {status}")
             except Exception as e:
                 self.results[test_name] = False
-                print(f"   ❌ FAILED: {e}")
+                print(f"   [FAIL]: {e}")
                 logger.error(f"{test_name} test failed: {e}")
         
         self.print_summary()
@@ -281,26 +297,56 @@ class TradingBotTester:
             # Don't fail the test for execution issues during market hours
             return True
     
+    def test_backtester_bot(self):
+        """Test BacktesterBot with a simple strategy."""
+        try:
+            # Define a simple backtest configuration
+            config = BacktestConfig(
+                start_date=datetime(2022, 1, 1),
+                end_date=datetime(2022, 3, 1),
+                initial_capital=10000.0,
+                assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC-USD', 'crypto', 5000.0)]
+            )
+            
+            backtester = BacktesterBot()
+            result = backtester.run_backtest(config)
+            
+            # Check if the result contains expected performance metrics
+            assert 'total_return' in result.performance_metrics
+            assert 'win_rate' in result.performance_metrics
+            assert 'max_drawdown' in result.performance_metrics
+            assert isinstance(result.performance_metrics['total_return'], float)
+            assert isinstance(result.performance_metrics['win_rate'], float)
+            assert isinstance(result.performance_metrics['max_drawdown'], float)
+            # Check if trade history and portfolio history are available
+            assert isinstance(result.trade_history, list)
+            assert isinstance(result.portfolio_history, list)
+            print("   ✅ BacktesterBot: Simple backtest completed successfully")
+            return True
+        except Exception as e:
+            print(f"   ❌ BacktesterBot: {e}")
+            return False
+    
     def print_summary(self):
         """Print test results summary."""
         print("\n" + "=" * 60)
-        print("📊 TEST RESULTS SUMMARY")
+        print("TEST RESULTS SUMMARY")
         print("=" * 60)
         
         passed = sum(1 for result in self.results.values() if result)
         total = len(self.results)
         
         for test_name, result in self.results.items():
-            status = "✅ PASSED" if result else "❌ FAILED"
+            status = "[PASS]" if result else "[FAIL]"
             print(f"{test_name:<25} {status}")
         
         print("-" * 60)
         print(f"Overall: {passed}/{total} tests passed")
         
         if passed == total:
-            print("🎉 ALL TESTS PASSED! Trading bot is ready for operation.")
+            print("ALL TESTS PASSED! Trading bot is ready for operation.")
         else:
-            print("⚠️ Some tests failed. Please check the issues above before trading.")
+            print("Some tests failed. Please check the issues above before trading.")
             
         return passed == total
 
@@ -310,13 +356,39 @@ def main():
     success = tester.run_all_tests()
     
     if success:
-        print("\n✅ You can now run the trading bot with confidence!")
-        print("💡 To start trading: python main.py")
+        print("\nYou can now run the trading bot with confidence!")
+        print("To start trading: python main.py")
     else:
-        print("\n❌ Please fix the failing tests before running the trading bot.")
+        print("\nPlease fix the failing tests before running the trading bot.")
         
     return 0 if success else 1
 
 if __name__ == "__main__":
     exit_code = main()
     sys.exit(exit_code)
+
+import unittest
+from datetime import datetime
+from bot_backtester import BacktesterBot, BacktestConfig
+
+class TestBacktesterBot(unittest.TestCase):
+    def test_simple_backtest_metrics(self):
+        config = BacktestConfig(
+            start_date=datetime(2022, 1, 1),
+            end_date=datetime(2022, 1, 10),
+            initial_capital=10000.0,
+            assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC-USD', 'crypto', 5000.0)]
+        )
+        backtester = BacktesterBot()
+        result = backtester.run_backtest(config)
+        self.assertIn('total_return', result.performance_metrics)
+        self.assertIn('win_rate', result.performance_metrics)
+        self.assertIn('max_drawdown', result.performance_metrics)
+        self.assertIsInstance(result.performance_metrics['total_return'], float)
+        self.assertIsInstance(result.performance_metrics['win_rate'], float)
+        self.assertIsInstance(result.performance_metrics['max_drawdown'], float)
+        self.assertIsInstance(result.trade_history, list)
+        self.assertIsInstance(result.portfolio_history, list)
+
+if __name__ == "__main__":
+    unittest.main()

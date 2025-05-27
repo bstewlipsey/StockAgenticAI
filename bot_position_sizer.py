@@ -5,7 +5,8 @@ PositionSizerBot: Position sizing logic for agentic trading systems.
 - Designed for modular integration with trading bots
 """
 
-from config_trading_variables import TOTAL_CAPITAL, MAX_POSITION_SIZE
+from config_trading import TOTAL_CAPITAL, MAX_POSITION_SIZE
+import logging
 
 class PositionSizerBot:
     """
@@ -33,7 +34,9 @@ class PositionSizerBot:
         self.total_capital = total_capital
         self.max_position_size = max_position_size
 
-    def calculate_position_size(self, price, confidence, volatility=None, available_cash=None, min_shares=1, allow_fractional=False):
+    def calculate_position_size(self, price, confidence, volatility=None, available_cash=None, min_shares=1, allow_fractional=False, asset_type=None):
+        logger = logging.getLogger(__name__)
+        logger.info(f"[PositionSizerBot] Calculating position size: price={price}, confidence={confidence}, volatility={volatility}, available_cash={available_cash}, min_shares={min_shares}, allow_fractional={allow_fractional}, asset_type={asset_type}")
         """
         Calculate the number of shares to trade based on capital, confidence, volatility, and cash constraints.
 
@@ -89,7 +92,10 @@ class PositionSizerBot:
         
         # === FINAL SAFETY CHECK ===
         if shares <= 0:
+            logger.warning(f"[PositionSizerBot] Position size is 0 for {asset_type or 'unknown'} (reason: insufficient capital/confidence/price too high). Inputs: price={price}, confidence={confidence}, available_cash={available_cash}")
             shares = 0
+        else:
+            logger.info(f"[PositionSizerBot] Calculated position size for {asset_type or 'unknown'}: {shares}")
         return shares
 
 # === Usage Example ===
