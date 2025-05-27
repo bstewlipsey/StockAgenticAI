@@ -196,12 +196,12 @@ class ReflectionBot:
                 insight = ReflectionInsight(
                     trade_id=insight_data.get('trade_id', ''),
                     symbol=insight_data.get('symbol', ''),
-                    insight_type=insight_data.get('insight_type', ''),
-                    insight_text=insight_data.get('insight_text', ''),
-                    confidence=insight_data.get('confidence', 0.0),
-                    actionable_recommendation=insight_data.get('actionable_recommendation', ''),
-                    related_indicators=insight_data.get('related_indicators', []),
-                    market_context=insight_data.get('market_context', ''),
+                    insight_type='reflection',
+                    insight_text=insight_data.get('ai_reflection', ''),
+                    confidence=insight_data.get('confidence_accuracy', 0.0),
+                    actionable_recommendation=insight_data.get('lessons_learned', ''),
+                    related_indicators=None,
+                    market_context=insight_data.get('key_insights', ''),
                     timestamp=insight_data.get('timestamp')
                 )
                 insight_objects.append(insight)

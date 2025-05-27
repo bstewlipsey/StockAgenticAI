@@ -23,22 +23,22 @@ class VisualizerBot:
         self.width = width
         self.height = height
         self.volume_height = 3  # Height for volume bars below the price chart
-        # Unicode symbols for trend direction
+        # ASCII-safe symbols for trend direction
         self.trend_symbols = {
-            'up': '↗',
-            'down': '↘',
-            'sideways': '→'
+            'up': '/^',
+            'down': '\\v',
+            'sideways': '->'
         }
-        # Unicode symbols for common chart patterns
+        # ASCII-safe symbols for common chart patterns
         self.patterns = {
-            'double_top': '⋀⋀',
-            'double_bottom': '⋁⋁',
-            'head_shoulders': '⋀⋀⋀',
-            'triangle': '◄►',
-            'ascending_triangle': '▲',
-            'descending_triangle': '▼',
-            'flag': '⚑',
-            'pennant': '⚐'
+            'double_top': '^^',
+            'double_bottom': 'vv',
+            'head_shoulders': '^^^',
+            'triangle': '<>',
+            'ascending_triangle': '/_',
+            'descending_triangle': '\\_',
+            'flag': '[F]',
+            'pennant': '[P]'
         }
         # Standard Fibonacci retracement levels
         self.fib_levels = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1]
@@ -60,7 +60,7 @@ class VisualizerBot:
         price_range = max_price - min_price
         if price_range == 0:
             # Flat price: just draw a line
-            return ['─' * self.width]
+            return ['-' * self.width]
         # Normalize prices to chart height
         normalized = [(p - min_price) / price_range * (self.height - 1) for p in prices]
         # Detect trend and get symbol
@@ -74,22 +74,22 @@ class VisualizerBot:
                     if x == len(normalized) - 1:  # Last point
                         line += trend_symbol
                     else:
-                        line += '●'
+                        line += 'o'
                 else:
                     line += ' '
             chart.append(line)
         # Draw volume bars if provided
         if volumes:
-            chart.append('─' * self.width)  # Separator
+            chart.append('-' * self.width)  # Separator
             max_volume = max(volumes)
             for i in range(self.volume_height):
                 line = ''
                 for vol in volumes:
                     norm_vol = (vol / max_volume) * self.volume_height
-                    line += '█' if norm_vol > i else ' '
+                    line += '#' if norm_vol > i else ' '
                 chart.append(line)
         # Add price scale at the bottom
-        chart.append('─' * self.width)
+        chart.append('-' * self.width)
         chart.append(f"Scale: {min_price:.2f} - {max_price:.2f}")
         return chart
 
@@ -295,6 +295,16 @@ class VisualizerBot:
             for lesson in perf['key_lessons']:
                 print(f"  - {lesson}")
 
+    # Replace Unicode arrows and special characters in chart output
+    def safe_print_chart(chart):
+        ascii_chart = []
+        for line in chart:
+            # Replace common Unicode arrows with ASCII
+            line = line.replace("\u2197", "/").replace("\u2198", "\\")
+            # Add more replacements as needed
+            ascii_chart.append(line)
+        print("\n".join(ascii_chart))
+
 def tail_log(log_path, alert_config):
     print(f"[LogMonitor] Monitoring {log_path} for real-time events...")
     if not os.path.exists(log_path):
@@ -357,15 +367,14 @@ if __name__ == "__main__":
     volumes = [1000, 1200, 900, 1100, 1300, 1250, 1400, 1350, 1500, 1550, 1600]
     chart, summary = bot.visualize_signals(prices, signals=None, indicators={'macd': 1, 'rsi': 65, 'sma_20': 110, 'has_signals': True}, volumes=volumes)
     print("\n".join(chart))
-    print("\n".join(summary))
-    alert_config = {
-        'no_trade_pattern': 'No trades executed',
-        'no_trade_cycles': 3,
-        'failure_pattern': 'Trade execution failed',
-        'failure_threshold': 2,
-        'rate_limit_pattern': 'rate limit',
-        'drawdown_pattern': 'drawdown',
-    }
-    tail_log('trading.log', alert_config)
+    # alert_config = {
+    #     'no_trade_pattern': 'No trades executed',
+    #     'no_trade_cycles': 3,
+    #     'failure_pattern': 'Trade execution failed',
+    #     'failure_threshold': 2,
+    #     'rate_limit_pattern': 'rate limit',
+    #     'drawdown_pattern': 'drawdown',
+    # }
+    # tail_log('trading.log', alert_config)  # Commented out for test
     # Uncomment to test interactive log viewer
     # display_interactive_log_viewer(filter_keywords=['DECISION', 'TRADE_OUTCOME', 'ERROR'])

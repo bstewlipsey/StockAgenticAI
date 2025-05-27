@@ -26,7 +26,7 @@ CRYPTO_STOP_LOSS_PCT = 0.05
 
 # === Trading Strategy Settings ===
 MIN_CONFIDENCE = 0.7
-TRADING_CYCLE_INTERVAL = 300
+TRADING_CYCLE_INTERVAL = 5  # seconds
 
 # === Technical Indicator Thresholds ===
 RSI_OVERSOLD = 30

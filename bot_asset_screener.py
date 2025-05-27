@@ -267,8 +267,8 @@ class AssetScreenerBot:
         """Analyze individual stock candidate"""
         try:
             bars = self.alpaca_api.get_bars(symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
-            closes = [bar.c for bar in bars]
-            volumes = [bar.v for bar in bars]
+            closes = [bar.c for bar in bars]  # Alpaca stock: bar.c = close
+            volumes = [bar.v for bar in bars]  # Alpaca stock: bar.v = volume
             if not closes or not volumes:
                 return None
             current_price = closes[-1]
@@ -341,8 +341,8 @@ class AssetScreenerBot:
             
             # Fetch OHLCV data from Coinbase
             bars = self.alpaca_api.get_crypto_bars(base_symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
-            closes = [bar.close for bar in bars]
-            volumes = [bar.volume for bar in bars]
+            closes = [bar.close for bar in bars]  # Crypto: bar.close = close
+            volumes = [bar.volume for bar in bars]  # Crypto: bar.volume = volume
             
             if not closes or not volumes:
                 return None
@@ -483,13 +483,43 @@ class AssetScreenerBot:
             self.logger.error(f"Error storing screening results: {str(e)}")
     
     def _get_fallback_assets(self) -> List[AssetScreeningResult]:
-        """Provide a set of fallback assets in case of screening failure"""
+        """Provide a set of fallback assets in case of screening failure. Always includes at least one crypto asset."""
         self.logger.warning("Using fallback assets due to screening error")
+        # Always include at least one crypto asset from TRADING_ASSETS if possible
+        crypto_assets = [a for a in ctv.TRADING_ASSETS if a[1] == 'crypto']
+        if crypto_assets:
+            fallback_crypto = AssetScreeningResult(
+                symbol=crypto_assets[0][0],
+                priority_score=40,
+                reasoning="Fallback crypto asset",
+                market_cap=None,
+                volume_rank=30,
+                momentum_score=50,
+                volatility_score=50,
+                sector="Cryptocurrency",
+                confidence=40,
+                asset_type='crypto',
+                allocation_usd=crypto_assets[0][2] if len(crypto_assets[0]) > 2 else 200
+            )
+        else:
+            fallback_crypto = AssetScreeningResult(
+                symbol="BTC/USD",
+                priority_score=40,
+                reasoning="Fallback crypto asset",
+                market_cap=None,
+                volume_rank=30,
+                momentum_score=50,
+                volatility_score=50,
+                sector="Cryptocurrency",
+                confidence=40,
+                asset_type='crypto',
+                allocation_usd=200
+            )
         return [
-            AssetScreeningResult(symbol="AAPL", priority_score=50, reasoning="Fallback asset", confidence=50),
-            AssetScreeningResult(symbol="TSLA", priority_score=50, reasoning="Fallback asset", confidence=50),
-            AssetScreeningResult(symbol="GOOGL", priority_score=50, reasoning="Fallback asset", confidence=50),
-            AssetScreeningResult(symbol="BTC/USD", priority_score=40, reasoning="Fallback crypto asset", confidence=40, asset_type='crypto')
+            AssetScreeningResult(symbol="AAPL", priority_score=50, reasoning="Fallback asset", market_cap=None, volume_rank=50, momentum_score=50, volatility_score=30, sector="Technology", confidence=50, asset_type='stock', allocation_usd=500),
+            AssetScreeningResult(symbol="TSLA", priority_score=50, reasoning="Fallback asset", market_cap=None, volume_rank=50, momentum_score=50, volatility_score=30, sector="Consumer Discretionary", confidence=50, asset_type='stock', allocation_usd=500),
+            AssetScreeningResult(symbol="GOOGL", priority_score=50, reasoning="Fallback asset", market_cap=None, volume_rank=50, momentum_score=50, volatility_score=30, sector="Technology", confidence=50, asset_type='stock', allocation_usd=500),
+            fallback_crypto
         ]
 
     def run(self):

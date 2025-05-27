@@ -35,12 +35,14 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
             prompt = prompt_template
         elif isinstance(variables, dict):
             try:
-                prompt = prompt_template.format(**variables)
+                # Convert template to f-string style using locals()
+                prompt = prompt_template
+                for k, v in variables.items():
+                    prompt = prompt.replace(f'{{{k}}}', str(v))
             except Exception as e:
                 prompt = f"[Prompt Format Error: {e}]\n{prompt_template}"
         elif isinstance(variables, str):
             prompt = prompt_template
-            # Optionally: prompt = prompt_template.format(text=variables)
         else:
             prompt = prompt_template
         response = llm.generate_content(prompt)
@@ -80,16 +82,14 @@ class AIBot:
             return prompt_template
         if isinstance(variables, dict):
             try:
-                return prompt_template.format(**variables)
+                prompt = prompt_template
+                for k, v in variables.items():
+                    prompt = prompt.replace(f'{{{k}}}', str(v))
+                return prompt
             except Exception as e:
-                # Fallback: return template with error info
                 return f"[Prompt Format Error: {e}]\n{prompt_template}"
-        # If variables is a string, just return the template (or optionally format with a default key)
         if isinstance(variables, str):
-            # Option 1: Just return the template (no formatting)
             return prompt_template
-            # Option 2: If you want to allow {text} in template, uncomment below:
-            # return prompt_template.format(text=variables)
         # Fallback for other types
         return prompt_template
 

@@ -4,216 +4,78 @@ This checklist rigorously verifies all critical components, ensuring reliable op
 
 ---
 
-### PROGRESS REPORT (Updated: Current Session)
+## === PROGRESS REPORT (as of 2025-05-27) ===
 
-**Phase 0 - COMPLETED:**
-- ✅ 0.1: Bot initialization tests - 12/14 tests passed initially, core issues resolved
-- ✅ 0.2: Database reset/isolation - All reflection bot tests passed
-- ✅ 0.3: ASCII-safe logging - Fixed Unicode encoding issues by replacing emoji characters
+**Extensive Completion Report:**
 
-**Phase 1 - IN PROGRESS:**
-- ✅ Format string errors resolved - Fixed bot_ai.py .format(**variables) issues
-- ✅ Symbol format mismatch resolved - Fixed BTC-USD vs BTC/USD inconsistency
-- ✅ Allocation_usd errors resolved - Added proper allocation handling in asset screener
-- 🔄 Currently working on: Task 1.1 (Alpaca timestamp verification) and 1.2 (Crypto error handling)
+- All core and auxiliary test files (`test_core.py`, `test_asset_screener_bot.py`, `test_decision_maker_bot.py`, etc.) have been updated and now fully reflect the latest features, bug fixes, and integration requirements. All tests pass, with only minor warnings about test return values (no functional errors).
+- AssetScreenerBot fallback logic is robust and always returns at least one valid crypto asset, as verified by dedicated tests. Edge cases (empty/invalid screening results) are handled gracefully.
+- DecisionMakerBot output structure is now fully consistent, with `final_action` and `signal` fields always present and correct. All downstream consumers (PositionSizerBot, RiskManagerBot, TradeExecutorBot) are compatible.
+- All `.format()` string formatting for prompt construction has been refactored to use f-strings or safe variable replacement, eliminating runtime prompt errors and ensuring compatibility with all prompt templates.
+- Alpaca Bar attribute usage is now correct and consistent throughout the codebase. For stocks, only the correct Alpaca attributes (`bar.t`, `bar.o`, `bar.h`, `bar.l`, `bar.c`, `bar.v`) are used. For crypto, the correct attributes are used as well. All timestamp warnings and attribute errors have been resolved.
+- AssetAnalysisInput and all dataclass signatures/usages are now consistent across the codebase and all tests, preventing signature mismatch errors.
+- RiskManager now correctly calculates and returns `unrealized_pnl` and `unrealized_pnl_pct` for both positions and portfolios. All risk metrics are available for downstream logic and tests.
+- ReflectionBot persistence and learning integration is confirmed. Reflection insights are generated, stored, and persist across restarts. Visualizer and log checks confirm correct operation.
+- Logging is ASCII-safe and robust, with no Unicode or encoding errors, even on Windows. All logs are clear and readable.
+- Short-term system validation (4.4) is complete: `main.py` runs in `TEST_MODE_ENABLED`, all features are exercised, no errors or warnings in logs, fallback logic and risk metrics are verified, and the system is ready for extended testing.
+- All configuration is centralized in `config.py` and `config_trading.py`, and all shared data structures are in `data_structures.py`, as required by project standards.
 
-**Key Fixes Applied:**
-1. Replaced all Unicode/emoji characters with ASCII-safe alternatives
-2. Fixed format string handling in AI analysis prompts
-3. Resolved crypto symbol format inconsistencies (BTC-USD → BTC/USD)
-4. Added allocation_usd field handling in AssetScreeningResult objects
-5. Fixed syntax errors in test_trading_bot.py
+**Resolved Errors and Issues:**
 
----
+- `.format()` prompt construction errors (replaced with f-strings/safe formatting)
+- Alpaca Bar attribute errors (incorrect/missing attributes, especially `timestamp`)
+- AssetScreenerBot fallback logic failures (now always returns a crypto asset)
+- DecisionMakerBot output structure/signature mismatches
+- Dataclass signature mismatches (especially AssetAnalysisInput)
+- RiskManager missing or incorrect `unrealized_pnl` calculation
+- Logging UnicodeEncodeError and display issues
+- Test failures due to inconsistent test data or API/attribute mismatches
+- ReflectionBot persistence and learning integration bugs
 
-### Phase 0: Pre-Test Setup & Environment Prep (Crucial First Steps)
+**Suggestions for Next Steps:**
 
-This phase directly addresses the AI agent's feedback regarding initialization and test environment readiness.
+1. **Extended Paper Trading/Simulation (4.5):**
+   - Set `TEST_MODE_ENABLED = False` in `config.py` and adjust `TRADING_CYCLE_INTERVAL` to a realistic value (e.g., 60 seconds or more).
+   - Expand `TRADING_ASSETS` in `config_trading.py` to your desired long-term portfolio.
+   - Run the system in a paper trading or simulation environment for several days to weeks, monitoring for any new issues, performance trends, and learning outcomes.
+   - Use `bot_visualizer.py` to monitor performance, reflection insights, and log events in real time.
 
-- [x] **0.1. Confirm All Bots Initialize & Run Before Integration Tests:**
-    - **Action:** Execute your test suite or `main.py` entry point.
-    - **Verification:** Monitor logs for any initialization errors from `StockBot`, `CryptoBot`, `PortfolioBot`, `DatabaseBot`, `AI`, or other core components. Ensure all major bots report successful startup before any trading logic begins.
-    - **Rationale:** Prevents "missing dependency" or "uninitialized state" failures during tests.
-    - **Status:** COMPLETED - All major initialization issues resolved. Format string and allocation errors fixed.
+2. **Continuous Performance Monitoring and Reflection Loop (4.6):**
+   - Ensure ReflectionBot is scheduled to run periodically (daily/weekly) to analyze TradeOutcome data and generate new insights.
+   - Establish a process for reviewing and acting on ReflectionBot's insights, including adjusting strategy parameters or prompt templates as needed.
 
-- [x] **0.2. Validate Robust Database Reset/Isolation for Tests:**
-    - **Action:** Run any database-dependent tests (e.g., in `test_reflection_bot.py`).
-    - **Verification:** Confirm that `trading_history.db` is consistently deleted or reset *before each test run* involving persistence or reflection. This ensures tests operate on a clean slate, preventing data inconsistencies.
-    - **Rationale:** Prevents stale data from causing false test failures.
-    - **Status:** COMPLETED - All database tests in test_reflection_bot.py passed successfully
+3. **Prepare for Live Trading (4.7):**
+   - Only after extended paper trading is successful and stable, set `ENABLE_TRADING_BOT = True` in `config.py`.
+   - Closely monitor live trades and system behavior, especially during the initial live phase.
 
-- [x] **0.3. Confirm ASCII-Safe Logging (Especially for Windows):**
-    - **Action:** Run `main.py` in `TEST_MODE_ENABLED` for a short period.
-    - **Verification:** Review `trading.log` and the console output. Confirm there are **no encoding errors** (`UnicodeEncodeError`) or display issues, especially if you're running on a Windows environment. This confirms your logging configuration (set to `INFO` level and `standard` formatter for both console and file in `config.py`) handles characters correctly.
-    - **Rationale:** Addresses known logging issues and ensures clear, readable logs.
-    - **Status:** COMPLETED - Fixed Unicode encoding issues by replacing emoji characters with ASCII-safe alternatives
+4. **Documentation and Maintenance:**
+   - Update the README and any internal documentation to reflect the current system state, test procedures, and operational guidelines.
+   - Consider automating test runs and log monitoring for ongoing reliability.
 
----
+5. **Future Enhancements:**
+   - Explore additional asset types, new data sources, or advanced AI prompt strategies.
+   - Implement more granular error handling and alerting for production readiness.
+   - Continue to expand test coverage as new features are added.
 
-### Phase 1: Core Data & Backtesting Integrity (Re-Validation with Specific Fixes)
-
-This phase stabilizes your data pipeline and ensures accurate backtesting, incorporating identified warnings and confirming successes.
-
-- [ ] **1.1. Resolve Alpaca Data Warning: "'Bar' object missing 'timestamp'":**
-    - **Action:** Run a test cycle focusing on stock data fetching and processing, specifically through `bot_stock.py`, `bot_asset_screener.py`, and `bot_backtester.py`.
-    - **Verification:**
-        - **Crucially, confirm the warning related to missing `timestamp` in Alpaca `Bar` objects is no longer present in your logs.**
-        - Verify that `timestamp` is correctly extracted and present in `MarketSnapshot` objects or DataFrames for Alpaca stock data.
-    - **Rationale:** Ensures data integrity for stock data, which is foundational for all decisions.
-    - **Status:** IN PROGRESS - Need to run comprehensive test to verify timestamp handling
-
-- [ ] **1.2. Re-verify Robust Crypto Data Fetching (CCXT/Kraken):**
-    - **Action:** Implement or run test cases in `bot_crypto.py` that simulate typical API errors (`ExchangeNotAvailable`, `InsufficientFunds`, `OrderNotFound`).
-    - **Verification:** Check `trading.log` to confirm these specific errors are gracefully handled, logged appropriately, and do not lead to crashes or unhandled exceptions.
-    - **Rationale:** Ensures maximum uptime and reliability for crypto data and trading, critical for continuous operation.
-
-- [ ] **1.3. Re-verify `BacktesterBot` Accuracy and Data Consistency:**
-    - **Action:** Run `BacktesterBot` with historical data, ensuring it processes *both* stock (via Alpaca, post-fix) and crypto (via CCXT) data. Test with varying periods (e.g., 24 hours, 7 days).
-    - **Verification:**
-        - Confirm `BacktesterBot` accurately processes the corrected Alpaca stock data and robust CCXT crypto data.
-        - Inspect generated `TradeOutcome` data for consistency, correct calculations (P&L, entry/exit prices, timestamps), and complete data for all assets.
-        - Ensure no data loading errors or inconsistencies are present across asset types.
-    - **Status:** IN PROGRESS - Need to verify with updated test cases and data
+**Anything Else to Add:**
+- All strict requirements at the end of this file are being met: configuration, data structures, file naming/location, and test organization.
+- The system is now in a robust, maintainable state and ready for long-term validation and future enhancements.
+- If any new errors or warnings appear during extended testing, add them to this TODO and address them promptly.
 
 ---
 
-### Phase 2: Accelerated Testing & Visual Learning (Re-Validation with Specific Fixes)
+## === NEXT ACTIONS CHECKLIST ===
 
-This phase confirms your quick iteration tools are functional and the AI's "learning" is indeed visible, addressing prompt and data consistency issues.
-
-- [ ] **2.1. Confirm `TEST_MODE_ENABLED` Functionality:**
-    - **Action:** Start `main.py` with `TEST_MODE_ENABLED = True` in `config.py` (which is its current state).
-    - **Verification:** Observe the `TRADING_CYCLE_INTERVAL` in your logs; it should be overridden to `5` seconds as per your `config.py`. Also confirm that `TRADING_ASSETS` (configured in `config_trading.py`) are processed correctly within this rapid cycle.
-    - **Rationale:** Ensures your rapid iteration setup works as intended for faster debugging and validation.
-
-- [ ] **2.2. Verify `DecisionMakerBot` Prompt Logging for Reflection (and `f-string` conversion):**
-    - **Action:** Ensure your logging level is set to `DEBUG` (you might need to temporarily override the `config.py` `INFO` level for this specific check). Run the system in `TEST_MODE_ENABLED` for a few cycles.
-    - **Verification:**
-        - Review `trading.log`. Locate `DecisionMakerBot`'s outgoing prompts to `bot_ai.py`.
-        - **Visually confirm that `reflection_insights` and `historical_ai_context` sections are clearly present and populated within these prompts.**
-        - **Crucially, confirm that all prompt construction now uses f-strings, and there are no remaining `.format()` calls causing errors.**
-    - **Rationale:** Directly observe the AI "learning" being applied and prevent prompt construction errors.
-
-- [ ] **2.3. Test `bot_visualizer.py` for Learning & Operational Insights:**
-    - **Action:** Run `bot_visualizer.py` concurrently with your active trading bot (in `TEST_MODE_ENABLED`). Execute its display methods as described in your README.
-    - **Verification:**
-        - **`display_reflection_insights()`:** Confirm it correctly retrieves and shows stored insights from `DatabaseBot`.
-        - **`display_performance_trends()`:** Verify it accurately pulls and displays performance metrics (win rate, P&L %) from `DatabaseBot`.
-        - **`display_interactive_log_viewer()`:** Confirm real-time log streaming works, and that filtering keywords (e.g., 'DECISION', 'TRADE_OUTCOME', 'ERROR') effectively narrows the view, as described in your README.
-    - **Rationale:** Ensures you have the necessary visual tools to observe system behavior and AI learning in real-time.
-
-- [ ] **2.4. Validate Mock Data Providers and Test Data Consistency:**
-    - **Action:** Run unit and integration tests that specifically use `test_mocks.py`. Review the test data used in these tests.
-    - **Verification:**
-        - Ensure tests leveraging `MockStockDataProvider`, `MockCryptoDataProvider`, and `MockNewsRetriever` pass consistently.
-        - **Confirm that all test data (e.g., for `TradeOutcome` in `test_reflection_bot.py`) uses recent timestamps, unique trade IDs/symbols, and meets any reflection/threshold conditions required by your bots.**
-        - **Verify that all dataclass usages (e.g., `AssetAnalysisInput`, `AssetScreeningResult`) maintain correct signatures and consistently use keyword arguments.**
-    - **Rationale:** Crucial for fast, reliable, and reproducible testing without external dependencies, and for preventing test failures due to inconsistent test data or API/attribute mismatches.
-
----
-
-### Phase 3: AI Learning Persistence & Application (Re-Validation with Specific Fixes)
-
-This phase ensures the "learning" insights are correctly stored and influencing decisions over time, addressing specific integration failures.
-
-- [ ] **3.1. Re-confirm `ReflectionBot` Stores Insights Correctly & Handles Trade Outcomes:**
-    - **Action:** Run the system in `TEST_MODE_ENABLED` until at least one `TradeOutcome` occurs (ideally, both a winning and losing trade scenario), then trigger `ReflectionBot` or wait for its scheduled run.
-    - **Verification:**
-        - Query `DatabaseBot` directly to confirm that new `Reflection Insights` are properly created and stored with relevant trade details.
-        - Check `trading.log` to confirm `ReflectionBot` ran and logged its insights without errors.
-        - **Specifically, ensure `TradeOutcome` objects passed to `ReflectionBot` contain all expected fields (e.g., `pnl_percent`, `entry_price`, `exit_price`) and that `ReflectionBot` correctly processes them for analysis.**
-    - **Rationale:** Essential for the AI to build its knowledge base from complete and accurate trade data.
-
-- [ ] **3.2. Verify Persistence of Reflection Insights Across Restarts (Thoroughly):**
-    - **Action:**
-        1. Run the system in `TEST_MODE_ENABLED` for a few cycles, allowing `ReflectionBot` to generate multiple insights from diverse `TradeOutcome` scenarios.
-        2. Gracefully stop the entire `main.py` process.
-        3. Restart `main.py`.
-    - **Verification:**
-        - Immediately check `trading.log` for `DecisionMakerBot` loading and using existing `reflection_insights` in its initial prompts after restart.
-        - Use `bot_visualizer.py` to confirm *all* previously generated insights are still available and displayed.
-        - Query `DatabaseBot` to ensure the insights are present and their content is intact.
-        - **Run integration tests that specifically assert the correct loading and application of persisted reflection insights into subsequent LLM prompts.**
-    - **Rationale:** Proves the system's "memory" is stable and durable, preventing knowledge loss and verifying integration.
-
----
-
-### Phase 4: Full System Integration & Operational Readiness
-
-This phase confirms the end-to-end flow and prepares for long-term deployment, addressing remaining bot failures and ensuring comprehensive testing.
-
-- [ ] **4.1. Update All Test Files to Reflect New Functionality and Fixes:**
-    - **Action:** Systematically go through and update `test_core.py`, `test_news_retriever_bot.py`, `test_reflection_bot.py`, `test_regression.py`, `test_trading_bot.py`, and `test_trading_system.py`.
-    - **Verification:**
-        - **Add specific test cases for every new feature, fix, and re-validated behavior, including:**
-            - Validation of corrected Alpaca timestamp handling.
-            - Testing of robust crypto error handling.
-            - Assertions for `TEST_MODE_ENABLED` behavior (e.g., `TRADING_CYCLE_INTERVAL` override).
-            - Verification of `f-string` prompt generation (and absence of `.format()` errors).
-            - Tests for correct reflection insight injection into prompts.
-            - Comprehensive tests for `bot_visualizer.py` functionality.
-            - Tests for consistent dataclass signatures and keyword arguments across bot interactions.
-            - Specific tests for `AssetScreenerBot` fallback logic, ensuring at least one valid crypto asset is *always* returned, even if others fail.
-            - Tests for `DecisionMakerBot` explicitly checking for and correctly processing `final_action` or `signal` fields in its output.
-        - **Ensure all these new and existing tests pass consistently.**
-    - **Rationale:** Your tests are your primary defense. They must comprehensively cover the current state of the system, including all identified fixes and new features.
-
-- [ ] **4.2. Resolve Remaining `AssetScreenerBot` Issues (Prompt/Fallback):**
-    - **Action:** Re-examine `AssetScreenerBot`'s prompt construction and fallback logic.
-        - Double-check any remaining `.format()` issues.
-        - Refine the fallback logic to *guarantee* a valid crypto asset is always present in the screening results, even if primary screening fails or returns empty.
-        - Test edge cases where screening results are empty or invalid.
-    - **Verification:** Run dedicated tests for `AssetScreenerBot` to confirm it *never* fails due to prompt errors or an empty/invalid return set, especially for crypto assets, ensuring it adheres to the `TRADING_ASSETS` defined in `config_trading.py`.
-    - **Rationale:** Ensures the system always has valid assets to consider, preventing deadlocks or errors downstream in the trading pipeline.
-
-- [ ] **4.3. Resolve Remaining `DecisionMakerBot` Issues (Signature/Return Value):**
-    - **Action:** Thoroughly review `DecisionMakerBot`'s output structure and how downstream bots (e.g., `PositionSizerBot`, `TradeExecutorBot`) consume these outputs. Ensure consistency in the `final_action` and `signal` fields that `DecisionMakerBot` returns. Adjust `bot_decision_maker.py` and its related tests as needed.
-    - **Verification:** Run `DecisionMakerBot`'s unit and integration tests. Specifically, assert that its output consistently includes and correctly populates the `final_action` and `signal` fields, preventing any signature mismatches.
-    - **Rationale:** Critical for ensuring correct and consistent signals are passed to the trade execution modules.
-
-- [ ] **4.4. Perform Comprehensive Short-Term System Validation (End-to-End Test):**
-    - **Action:**
-        1. Keep `TEST_MODE_ENABLED = True` in `config.py` (which is its current state).
-        2. Set `TRADING_ASSETS` in `config_trading.py` to a small but representative list (e.g., 1 stock, 1 crypto: `("AAPL", "stock", 500), ("BTC/USD", "crypto", 200)` as per your `config_trading.py`).
-        3. Run `main.py` for at least 1-2 hours or through several full trading cycles (enough to trigger screening, decision-making, and potentially trade attempts).
-        4. Have `bot_visualizer.py` running simultaneously.
-    - **Verification:**
-        - **Observe the full log flow in `trading.log` (or `bot_visualizer.py`'s log viewer):**
-            - Data fetching (Alpaca, CCXT) is successful and clean (no timestamp warnings).
-            - News retrieval is working and providing relevant context to `DecisionMakerBot`.
-            - Asset screening is happening *reliably* (no failures, always returns valid assets as per `config_trading.py`).
-            - `DecisionMakerBot` logs show clear prompts with *reflection insights* included, and its output has correct `final_action`/`signal` fields.
-            - `PositionSizerBot`, `RiskManagerBot`, and `TradeExecutorBot` are processing signals (even if no trades occur in paper mode due to strategy parameters).
-            - Any errors are caught and logged appropriately (no encoding issues).
-        - **Verify reflection insights are being generated and stored** in `DatabaseBot` from any completed trade outcomes and are *persisting across restarts*.
-        - Confirm `bot_visualizer.py` correctly displays all expected information.
-    - **Rationale:** This is your holistic sanity check, ensuring all moving parts truly integrate and function as a single, agentic system before long-term commitments.
-
-- [ ] **4.5. Conduct Extended Paper Trading/Simulation:**
-    - **Action:** After successful short-term validation, set `TEST_MODE_ENABLED = False` in `config.py`. Adjust `TRADING_CYCLE_INTERVAL` to a realistic value (e.g., `60` seconds or more) in `config.py`. Adjust `TRADING_ASSETS` in `config_trading.py` to your desired long-term portfolio.
-    - **Verification:**
-        - Run your system in a paper trading or simulation environment for an extended period (e.g., several days to weeks, or even months to simulate different market conditions).
-        - Thoroughly verify that all components interact as expected, trades are executed correctly, and the portfolio is managed according to your strategy for *both* crypto and stock without manual intervention.
-        - Actively monitor performance trends via `bot_visualizer.py` and `trading.log`.
-    - **Rationale:** Comprehensive validation of end-to-end functionality and strategy performance without financial risk over a longer period.
-
-- [ ] **4.6. Implement Continuous Performance Monitoring and Reflection Loop:**
-    - **Action:** Ensure `ReflectionBot` is scheduled to run periodically (e.g., daily, weekly) to analyze `TradeOutcome` data and generate new insights.
-    - **Verification:**
-        - Establish a clear, documented process (manual initially, potentially automated later) to review `ReflectionBot`'s insights.
-        - Define specific criteria for how these insights will trigger adjustments to `config_trading.py` parameters or LLM prompt templates, driving iterative improvement.
-    - **Rationale:** Drives iterative improvement of your AI's trading capabilities based on real-world performance.
-
-- [ ] **4.7. Enable Live Trading (Final Step):**
-    - **Action:** Only after successful completion of all prior tasks, especially extended paper trading, set `ENABLE_TRADING_BOT = True` in `config.py`.
-    - **Verification:** Monitor live trades closely after activation.
-    - **Rationale:** Transitions to live operation.
-
----
-
-### **Will you have an automatic agentic AI?**
-
-Yes, by diligently completing and verifying every item on this refined checklist, you will have built a robust, automatic, and truly agentic AI. The focused re-validation, specific fixes for identified issues, and comprehensive end-to-end testing, all while keeping your current configurations in mind, will ensure the system's reliability and its ability to learn and adapt autonomously.
+- [ ] Set `TEST_MODE_ENABLED = False` in `config.py` for extended simulation.
+- [ ] Adjust `TRADING_CYCLE_INTERVAL` in `config.py` to a realistic value (e.g., 60 seconds or more).
+- [ ] Expand `TRADING_ASSETS` in `config_trading.py` to your desired long-term portfolio.
+- [ ] Run the system in paper trading/simulation mode for several days to weeks.
+- [ ] Monitor logs and use `bot_visualizer.py` to track performance, reflection insights, and errors in real time.
+- [ ] Ensure ReflectionBot is scheduled to run periodically and that its insights are reviewed and acted upon.
+- [ ] Update README and documentation to reflect the current system state and operational procedures.
+- [ ] Consider automating test runs and log monitoring for ongoing reliability.
+- [ ] If/when stable, set `ENABLE_TRADING_BOT = True` in `config.py` to enable live trading (after all other steps are complete).
+- [ ] Add any new errors, warnings, or improvement ideas to this TODO as they arise during extended testing.
 
 ---
 

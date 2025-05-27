@@ -42,13 +42,13 @@ class DecisionMakerBot:
         Log the full prompt content sent to the AI, highlighting reflection_insights and historical_ai_context.
         """
         logger = logging.getLogger(__name__)
-        logger.debug("\n=== AI PROMPT SENT TO LLM ===\n" + prompt)
+        logger.info("\n=== AI PROMPT SENT TO LLM ===\n" + prompt)
         # Highlight RAG sections if present
         if analysis_input.reflection_insights:
-            logger.debug("\n--- [RAG] Reflection Insights Section ---\n" + str(analysis_input.reflection_insights))
+            logger.info("\n--- [RAG] Reflection Insights Section ---\n" + str(analysis_input.reflection_insights))
         if analysis_input.historical_ai_context:
-            logger.debug("\n--- [RAG] Historical AI Context Section ---\n" + str(analysis_input.historical_ai_context))
-        logger.debug("\n=== END AI PROMPT ===\n")
+            logger.info("\n--- [RAG] Historical AI Context Section ---\n" + str(analysis_input.historical_ai_context))
+        logger.info("\n=== END AI PROMPT ===\n")
     
     def make_trading_decision(
         self, 
@@ -104,6 +104,8 @@ class DecisionMakerBot:
             signal = ActionSignal.HOLD
         # Apply confidence adjustments and filters as needed (simplified)
         adjusted_confidence = confidence
+        # Always include final_action for downstream compatibility
+        final_action = signal.name.lower() if hasattr(signal, 'name') else str(signal).lower()
         if adjusted_confidence >= min_confidence and signal in [ActionSignal.BUY, ActionSignal.SELL]:
             return TradingDecision(
                 symbol=analysis_input.symbol,
@@ -113,8 +115,10 @@ class DecisionMakerBot:
                 metadata={
                     'source': 'DecisionMakerBot',
                     'raw_market_data': analysis_input.market_data,
-                    'raw_technical_indicators': analysis_input.technical_indicators
-                }
+                    'raw_technical_indicators': analysis_input.technical_indicators,
+                    'final_action': final_action
+                },
+                final_action=final_action
             )
         else:
             return TradingDecision(
@@ -125,8 +129,10 @@ class DecisionMakerBot:
                 metadata={
                     'source': 'DecisionMakerBot',
                     'raw_market_data': analysis_input.market_data,
-                    'raw_technical_indicators': analysis_input.technical_indicators
-                }
+                    'raw_technical_indicators': analysis_input.technical_indicators,
+                    'final_action': 'hold'
+                },
+                final_action='hold'
             )
         # Before returning, log the prompt context if available
         prompt = getattr(analysis_input, 'full_prompt', None)

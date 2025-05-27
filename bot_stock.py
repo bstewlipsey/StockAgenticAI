@@ -64,8 +64,9 @@ class StockBot:
             if not bars:
                 logger.warning(f"No bars returned for {symbol} with timeframe {DEFAULT_STOCK_TIMEFRAME}. Skipping analysis.")
                 return {"error": f"No market data available for {symbol} ({DEFAULT_STOCK_TIMEFRAME})"}
-            prices = [bar.c for bar in bars]
-            volumes = [bar.v for bar in bars]
+            prices = [bar.c for bar in bars]  # Alpaca stock: bar.c = close
+            volumes = [bar.v for bar in bars]  # Alpaca stock: bar.v = volume
+            timestamps = [getattr(bar, 't', None) for bar in bars]  # Alpaca stock: bar.t = timestamp
             tech_analysis = IndicatorBot(prices)
             signals, indicators = tech_analysis.get_signals()
             signal_summary = "\n".join([f"- {signal}: {reason} (Confidence: {confidence*100:.0f}%)" for signal, reason, confidence in signals])

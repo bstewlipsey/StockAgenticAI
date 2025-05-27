@@ -249,7 +249,8 @@ class TradingBotTester:
                 return True
             else:
                 print(f"   [FAIL] Crypto Data: Invalid response: {ticker}")
-                return False        except Exception as e:
+                return False
+        except Exception as e:
             print(f"   [FAIL] Crypto Data: {e}")
             return False
     

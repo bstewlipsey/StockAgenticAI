@@ -31,6 +31,7 @@ class TradingDecision:
     rationale: Optional[str] = "No rationale provided."
     # Optional field for any additional metadata from the AI or analysis
     metadata: Dict[str, Any] = field(default_factory=dict)
+    final_action: Optional[str] = None  # Always set to signal.value (for test compatibility)
 
 @dataclass
 class AssetAnalysisInput:

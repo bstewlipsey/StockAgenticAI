@@ -41,7 +41,7 @@ JITTER_DELAY = 1                    # Maximum jitter in seconds to add to retry 
 #   CRYPTO: DEFAULT_CRYPTO_TIMEFRAME = ("1", "d") # 1 day bars ("m"=minute, "h"=hour, "d"=day)
 #   # To use: timeframe = f"{value}{unit}"  # e.g., "1d", "15m"
 DEFAULT_STOCK_TIMEFRAME = (1, "Day")       # (value, unit) for Alpaca TimeFrame
-DEFAULT_CRYPTO_TIMEFRAME = ("1", "d")   # (value, unit) for Kraken/CCXT or similar
+DEFAULT_CRYPTO_TIMEFRAME = ("1", "h")   # (value, unit) for Kraken/CCXT or similar
 LOOKBACK_PERIOD = 100         # Number of candlesticks to analyze
 TRADING_CYCLE_INTERVAL = 60  # How often to check for trades (1 minute for testing)
 
