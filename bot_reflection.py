@@ -383,7 +383,6 @@ class ReflectionBot:
         """Create a detailed reflection prompt for AI analysis"""
         
         outcome_type = "profitable" if trade_outcome.pnl > 0 else "losing"
-        
         # Use f-string, not .format(), to avoid tuple index errors
         prompt = f"""
         Analyze this completed {outcome_type} trade for learning insights:
@@ -413,7 +412,6 @@ class ReflectionBot:
         
         Focus on actionable insights that can improve future trading decisions.
         """
-        
         return prompt
     
     def _parse_ai_reflection_response(

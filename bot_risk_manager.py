@@ -74,29 +74,30 @@ class RiskManager:
                 'investment': 0.0,
                 'current_value': 0.0,
                 'pnl': 0.0,
+                'unrealized_pnl': 0.0,
                 'pnl_percent': 0.0,
+                'unrealized_pnl_pct': 0.0,
                 'risk_level': 'NONE',
                 'max_loss': 0.0,
                 'profit_loss': 0.0,
-                'rejection_reason': 'Zero or negative quantity/entry price.',
-                'unrealized_pnl': 0.0
+                'rejection_reason': 'Zero or negative quantity/entry price.'
             }
         investment = position.quantity * position.entry_price
         current_value = position.quantity * position.current_price
         pnl = current_value - investment
         pnl_percent = (pnl / investment) if investment != 0 else 0
         max_loss = abs(investment * self.max_position_risk)
-        if abs(pnl_percent) > self.max_position_risk:
-            logger.warning(f"[RiskManager] {position.symbol} risk level HIGH: max position risk exceeded ({abs(pnl_percent):.4f} > {self.max_position_risk:.4f})")
+        risk_level = 'HIGH' if abs(pnl_percent) > self.max_position_risk else 'LOW'
         return {
-            'investment': investment,           # Total amount invested in this position
-            'current_value': current_value,     # Current market value of the position
-            'pnl': pnl,                        # Profit or loss in dollars
+            'investment': investment,
+            'current_value': current_value,
+            'pnl': pnl,
             'unrealized_pnl': pnl,  # Alias for test compatibility
-            'pnl_percent': pnl_percent,         # Profit or loss as a percent of investment
-            'risk_level': 'HIGH' if abs(pnl_percent) > self.max_position_risk else 'LOW',  # Risk flag
-            'max_loss': max_loss,              # Maximum allowed loss for this position
-            'profit_loss': pnl                 # Alias for P&L for test compatibility
+            'pnl_percent': pnl_percent,
+            'unrealized_pnl_pct': pnl_percent,  # Alias for test compatibility
+            'risk_level': risk_level,
+            'max_loss': max_loss,
+            'profit_loss': pnl  # Alias for P&L for test compatibility
         }
 
     def calculate_portfolio_risk(self, positions: List[Position]) -> Dict:

@@ -367,7 +367,8 @@ class TradingSystemTester:
     def test_decision_maker_bot(self):
         """Test DecisionMakerBot logic and integration."""
         try:
-            from bot_decision_maker import DecisionMakerBot, AssetAnalysisInput
+            from bot_decision_maker import DecisionMakerBot
+            from data_structures import AssetAnalysisInput
             bot = DecisionMakerBot()
             analysis = AssetAnalysisInput(
                 symbol='AAPL',

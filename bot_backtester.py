@@ -307,16 +307,45 @@ class BacktesterBot:
                         ts = getattr(bar, 't', None)
                     if ts is None:
                         ts = getattr(bar, 'start', None)
-                    if ts is None:
-                        # Fallback: use index or skip
+                    if ts is None and hasattr(bar, 'time'):  # Some APIs use 'time'
+                        ts = getattr(bar, 'time', None)
+                    
+                    # Defensive: Try multiple possible attribute names for OHLCV
+                    open_ = None
+                    for attr in ['open', 'o', 'Open']:
+                        open_ = getattr(bar, attr, None)
+                        if open_ is not None:
+                            break
+                    high = None
+                    for attr in ['high', 'h', 'High']:
+                        high = getattr(bar, attr, None)
+                        if high is not None:
+                            break
+                    low = None
+                    for attr in ['low', 'l', 'Low']:
+                        low = getattr(bar, attr, None)
+                        if low is not None:
+                            break
+                    close = None
+                    for attr in ['close', 'c', 'Close']:
+                        close = getattr(bar, attr, None)
+                        if close is not None:
+                            break
+                    volume = None
+                    for attr in ['volume', 'v', 'Volume']:
+                        volume = getattr(bar, attr, None)
+                        if volume is not None:
+                            break
+                    # Skip bars with any missing data
+                    if ts is None or open_ is None or high is None or low is None or close is None or volume is None:
                         continue
                     data.append({
                         'timestamp': ts,
-                        'open': float(bar.open),
-                        'high': float(bar.high),
-                        'low': float(bar.low),
-                        'close': float(bar.close),
-                        'volume': int(bar.volume)
+                        'open': float(open_),
+                        'high': float(high),
+                        'low': float(low),
+                        'close': float(close),
+                        'volume': int(volume)
                     })
                 if not data:
                     return pd.DataFrame()
