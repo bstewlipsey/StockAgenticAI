@@ -30,6 +30,7 @@ from bot_trade_executor import TradeExecutorBot
 from bot_stock import StockBot
 from bot_crypto import CryptoBot
 from bot_ai import AIBot
+from test_mocks import MockStockDataProvider, MockCryptoDataProvider, MockNewsRetriever
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
@@ -136,6 +137,28 @@ def test_ai_analysis():
         return isinstance(result, str) and len(result) > 0
     except Exception as e:
         logger.error(f"AI analysis: {e}"); return False
+
+def test_mock_stock_provider():
+    mock = MockStockDataProvider()
+    prices = mock.get_historical_prices('AAPL', limit=5)
+    assert prices == [100, 101, 102, 103, 104], f"Unexpected prices: {prices}"
+    assert mock.get_current_price('AAPL') == 123.45
+    print("MockStockDataProvider passed.")
+
+def test_mock_crypto_provider():
+    mock = MockCryptoDataProvider()
+    prices = mock.get_historical_prices('BTC/USD', limit=3)
+    assert prices == [200, 201, 202], f"Unexpected prices: {prices}"
+    assert mock.get_current_price('BTC/USD') == 23456.78
+    print("MockCryptoDataProvider passed.")
+
+def test_mock_news_retriever():
+    mock = MockNewsRetriever()
+    news = mock.fetch_news('BTC news')
+    assert len(news) == 2
+    summary = mock.augment_context_and_llm('BTC news')
+    assert summary == 'Test news summary.'
+    print("MockNewsRetriever passed.")
 
 def main():
     print("\n=== StockAgenticAI Core Smoke Test ===")

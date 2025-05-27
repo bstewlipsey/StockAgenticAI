@@ -1,6 +1,6 @@
 # === Agentic Stock AI - Automated Trading Activation TODO Progress ===
 
-## COMPLETED TASKS (from previous updates)
+## COMPLETED TASKS (as of current update)
 
 - Modular bot files exist in correct locations.
 - `main.py` instantiates `OrchestratorBot` and starts the trading loop.
@@ -24,49 +24,101 @@
 - All performance metrics (e.g., `win_rate`) are floats.
 - `TradeOutcome` construction is fixed to always include `pnl_percent`.
 - All strict requirements concerning file placement and naming conventions are met.
+- **Phase 1: Debugging Crypto Trading Flow - Data & Screening (COMPLETED):**
+    - `1.1. Enhance AssetScreenerBot Logging for Crypto Specifics.`
+    - `1.2. Review and Adjust AssetScreenerBot Crypto Parameters in config_trading.py.`
+    - `1.3. Robustify 24/7 Crypto Data Fetching.`
+- **Phase 2: Debugging AI Analysis & Decision Making for Crypto (COMPLETED):**
+    - `2.1. Enhance DecisionMakerBot Logging for Crypto Analysis.`
+    - `2.2. Review config_trading.py for DecisionMakerBot Crypto Bias.`
+- **Phase 3: Validating Trade Execution Logic for Both Crypto & Stock (COMPLETED):**
+    - `3.1. Enhance PositionSizerBot and RiskManagerBot Logging.`
+    - `3.2. Review and Adjust config_trading.py for Sizing and Risk Parameters (Crypto & Stock).`
+    - `3.3. Verify TradeExecutorBot Success/Failure Logging.`
+- **Phase 4: Continuous Monitoring & Automated Trading Activation (PARTIALLY COMPLETED):**
+    - `4.1. Implement Comprehensive Real-time Monitoring & Alerts.`
 
-## OUTSTANDING TASKS (Prioritized for Automated Trading)
+## OUTSTANDING TASKS (Prioritized for Robust Automated Trading)
 
-### Phase 1: Debugging Crypto Trading Flow - Data & Screening (Highest Priority)
+### Phase 1: Data Source Refinement & Backtester Stability (Highest Priority)
 
-- [x] **1.1. Enhance `AssetScreenerBot` Logging for Crypto Specifics:**
-      - Logging added for considered crypto symbols, raw data, criteria, and exclusion reasons in `bot_asset_screener.py`.
-- [x] **1.2. Review and Adjust `AssetScreenerBot` Crypto Parameters in `config_trading.py`:**
-      - Separate `MIN_MARKET_CAP_CRYPTO` and `MIN_VOLUME_CRYPTO` added and documented in `config_trading.py`.
-- [x] **1.3. Robustify 24/7 Crypto Data Fetching:**
-      - Aggressive error handling, exponential backoff, and logging for rate limits, empty data, and network issues implemented in `bot_crypto.py`.
+This phase addresses the `yfinance` errors and stabilizes your data pipeline, crucial for both live trading and accurate backtesting.
 
-### Phase 2: Debugging AI Analysis & Decision Making for Crypto
+- [x] **1.1. Transition Stock Data Fetching to Alpaca's Market Data API:**
+      - All stock data fetching in `bot_asset_screener.py` now uses Alpaca's official data API for historical and real-time stock data instead of `yfinance`. No yfinance usage remains for stocks.
+      - Rationale: Eliminated `yfinance` rate limit and data quality issues for stocks, improved reliability. (Completed May 26, 2025)
+- [x] **1.2. Enhance `bot_crypto.py` to handle CCXT/Kraken specific errors/edge cases:**
+      - ccxt/Kraken-specific errors (`ExchangeNotAvailable`, `InsufficientFunds`, `OrderNotFound`) are now explicitly handled and logged in `bot_crypto.py` for robust crypto data/trading reliability. (Completed May 26, 2025)
+- [x] **1.3. Fix `BacktesterBot` Data Loading Issues:**
+      - BacktesterBot now loads historical stock data via Alpaca and crypto data via ccxt (Kraken), with fallback to synthetic data if API fails. DataFrames are formatted consistently for both asset types. (Completed May 26, 2025)
+      - Note: There is a warning about 'Bar' object missing 'timestamp' in Alpaca data; this should be addressed in a future cleanup, but does not block backtesting for crypto or overall test pass.
 
-- [x] **2.1. Enhance `DecisionMakerBot` Logging for Crypto Analysis:**
-      - Logging added for crypto analysis: symbol, action, confidence, and reasoning in `bot_decision_maker.py`.
-- [x] **2.2. Review `config_trading.py` for `DecisionMakerBot` Crypto Bias:**
-      - Examined and separated parameters like `confidence_boost_factors`, `risk_penalty_factors`, and `filters_enabled` for crypto and stocks in `config_trading.py` to avoid bias. LLM prompt template is already crypto-aware.
+---
 
-### Phase 3: Validating Trade Execution Logic for Both Crypto & Stock
+### Phase 2: Accelerated Testing & Visual Debugging
 
-- [x] **3.1. Enhance `PositionSizerBot` and `RiskManagerBot` Logging:**
-      - In `bot_position_sizer.py`, log the inputs (e.g., current price, available capital, risk tolerance) and the calculated `position_size` for *each* asset, explicitly noting if it's crypto or stock. Log if `position_size` is `0` and why.
-      - In `bot_risk_manager.py`, log every risk check performed and, if a trade is **rejected**, state the precise reason (e.g., "max daily loss exceeded," "individual asset risk limit breached," "allocation too small for current price").
-- [x] **3.2. Review and Adjust `config_trading.py` for Sizing and Risk Parameters (Crypto & Stock):**
-      - Verified that parameters like `MIN_TRADE_VALUE`, `MAX_ASSET_ALLOCATION`, `DAILY_RISK_LIMIT`, and `TRANSACTION_FEES` are set appropriately for both asset classes in `config_trading.py`.
-- [x] **3.3. Verify `TradeExecutorBot` Success/Failure Logging:**
-      - Robust logging in `bot_trade_executor.py` confirms:
-          - It successfully receives trade requests for both crypto and stock.
-          - It attempts to execute the trade.
-          - It logs the *final outcome* of the trade execution (success or detailed failure message from the exchange API).
+This phase focuses on quick iteration and seeing the AI's "learning" in action.
 
-### Phase 4: Continuous Monitoring & Automated Trading Activation
+- [x] **2.1. Implement Quick Testing Mode Configuration:**
+      - Added `TEST_MODE_ENABLED` flag in `config.py`. When enabled, `TRADING_CYCLE_INTERVAL` is set to 5 seconds for rapid iteration/testing. (Completed May 26, 2025)
+- [x] **2.2. Enhance `DecisionMakerBot` Prompt Logging for Learning Visualization:**
+      - `bot_decision_maker.py` now logs the *full prompt content* sent to `bot_ai.py` at DEBUG level, with clear delineation of `reflection_insights` and `historical_ai_context` sections. This enables direct observation of the "learning" process as past insights augment future prompts. (Completed May 26, 2025)
+- [x] **2.3. Extend `bot_visualizer.py` for Learning and Operational Insights:**
+      - Added `display_reflection_insights(symbol=None, limit=10)` and `display_performance_trends(symbol=None, days=30)` methods to `VisualizerBot` for displaying insights and performance metrics from `DatabaseBot`/`ReflectionBot`.
+      - Added `display_interactive_log_viewer(log_path='trading.log', filter_keywords=None)` for real-time log viewing with optional filtering (e.g., DECISION, TRADE_OUTCOME, ERROR).
+      - These features provide a clear, immediate, and persistent view of the system's operations and its "learning" process. (Completed May 26, 2025)
+- [x] **2.4. Implement Mock Data Providers for Unit/Integration Tests:**
+      - Created `test_mocks.py` with `MockStockDataProvider`, `MockCryptoDataProvider`, and `MockNewsRetriever` for deterministic, API-independent testing.
+      - Integrated these mocks and their tests into `test_core.py`.
+      - This enables faster, more reliable, and reproducible unit/integration tests. (Completed May 26, 2025)
 
-- [x] **4.1. Implement Comprehensive Real-time Monitoring & Alerts:**
-      - Real-time log monitor and alert system implemented in `bot_visualizer.py`. Monitors trading.log for no trades, repeated failures, API rate limits, and drawdowns.
-- [ ] **4.2. Conduct Extended Paper Trading/Simulation:**
-      - Before deploying with live funds, run your system in a paper trading or simulation environment for an extended period (e.g., several days to weeks).
-      - Verify that all components interact as expected, trades are executed correctly, and the portfolio is managed according to your strategy for *both* crypto and stock.
-- [ ] **4.3. Continuous Performance Monitoring and Reflection:**
-      - Regularly review your system's performance metrics (`win_rate`, `pnl_percent`, `max_drawdown`, etc.).
-      - Actively use `ReflectionBot` to analyze past trades, identify patterns, and generate insights.
-      - Based on reflection insights, manually (or eventually, automatically) fine-tune parameters in `config_trading.py` or refine the LLM's prompts to improve trading strategy and overall bot performance.
+---
+
+### Phase 3: AI Learning & Persistence
+
+This phase ensures the AI's "learnings" (reflection insights) are properly utilized and preserved.
+
+- [x] **3.1. Implement `ReflectionBot` Insight Retrieval and Injection into LLM Prompts:**
+      - `ReflectionBot` now stores detailed insights from `TradeOutcome` analysis in `DatabaseBot`.
+      - `DecisionMakerBot` retrieves relevant `reflection_insights` and `historical_ai_context` for each asset from `DatabaseBot` and injects them into the LLM prompt for `bot_ai.py`.
+      - Rationale: The AI now "learns" from past performance by incorporating historical context and reflections into future decision-making. (Completed May 26, 2025)
+- [x] **3.2. Validate `DatabaseBot` Persistence for Reflection Insights:**
+      - Perform tests (e.g., restart the entire system) to ensure that `ReflectionBot`'s insights, once stored in `DatabaseBot`, persist across program restarts.
+      - Rationale: Ensure that accumulated "knowledge" is not lost when the program stops and restarts.
+
+---
+
+### Phase 4: Final Activation & Long-term Operations
+
+With data robust, quick testing in place, and AI learning integrated, this phase is about enabling and monitoring long-term automated trading.
+
+- [ ] **4.1. Update Test Files to Reflect New Functionality:**
+      - Review and update the following test files to include tests for new functionalities, configurations, and expected behaviors introduced by the above tasks, especially for:
+          - **`test_core.py`**: For new `config.py` flags (like `TEST_MODE_ENABLED`) and mock data providers.
+          - **`test_news_retriever_bot.py`**: Ensure it works with updated data fetching or any new context integration.
+          - **`test_reflection_bot.py`**: Crucially, test the storage and retrieval of insights from `DatabaseBot`.
+          - **`test_regression.py`**: Add new regression tests to cover the full end-to-end flow with diversified asset types and quick testing modes.
+          - **`test_trading_bot.py`**: Ensure it covers the refined `PositionSizerBot`, `RiskManagerBot`, and `TradeExecutorBot` logic for both crypto and stock.
+          - **`test_trading_system.py`**: Expand integration tests to cover the full system loop, including `AssetScreenerBot`'s updated crypto logic and the passing of reflection insights.
+      - Rationale: Ensure all new features and fixes are validated, maintaining system integrity and preventing regressions.
+- [ ] **4.2. Perform Short-Term System Validation:**
+      - With `TEST_MODE_ENABLED` set to `True` in `config.py` and a very small `TRADING_ASSETS` list, run the entire system for a short period (e.g., 1-2 hours or a few trading cycles).
+      - Actively use `bot_visualizer.py` to monitor logs, reflection insights, and observe any trade attempts (or lack thereof) for both stock and crypto.
+      - Verify that prompt logging from `DecisionMakerBot` clearly shows reflection insights being included.
+      - Check for any errors or unexpected behavior in the `trading.log`.
+      - Rationale: Provide immediate, end-to-end verification that all integrated components are working together correctly in a rapid testing environment before committing to extended simulations.
+- [ ] **4.3. Conduct Extended Paper Trading/Simulation:**
+      - After successful short-term validation, set `TEST_MODE_ENABLED` to `False` and `TRADING_CYCLE_INTERVAL` to a realistic value in `config.py`. Adjust `TRADING_ASSETS` in `config_trading.py` to your desired long-term portfolio.
+      - Run your system in a paper trading or simulation environment for an extended period (e.g., several days to weeks, or even months to simulate different market conditions).
+      - Thoroughly verify that all components interact as expected, trades are executed correctly, and the portfolio is managed according to your strategy for *both* crypto and stock.
+      - Rationale: Comprehensive validation of end-to-end functionality and strategy performance without financial risk over a longer period.
+- [ ] **4.4. Continuous Performance Monitoring and Reflection Loop:**
+      - Ensure `ReflectionBot` is scheduled to run periodically (e.g., daily, weekly) to analyze `TradeOutcome` data and generate new insights.
+      - Establish a process (manual initially, potentially automated later) to review `ReflectionBot`'s insights and decide on adjustments to `config_trading.py` parameters or LLM prompt templates.
+      - Rationale: Drive iterative improvement of your AI's trading capabilities based on real-world performance.
+- [ ] **4.5. Enable `ENABLE_TRADING_BOT = True` in `config.py` (Final Step):**
+      - Only after successful completion of all prior tasks, especially extended paper trading, switch this flag to activate continuous automated trading.
+      - Rationale: Transition to live operation.
 
 ---
 

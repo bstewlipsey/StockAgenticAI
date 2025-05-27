@@ -322,13 +322,45 @@ class BacktesterBot:
             return pd.DataFrame()
     
     def _load_crypto_historical_data(self, symbol: str, start_date: datetime, end_date: datetime) -> pd.DataFrame:
-        """Load historical crypto data"""
+        """Load historical crypto data using ccxt (Kraken). Fallback to synthetic if API fails."""
+        import ccxt
+        logger = logging.getLogger(__name__)
         try:
-            # For crypto, we'd typically use a crypto data provider
-            # This is a placeholder implementation
-            logger.warning(f"Crypto historical data loading not fully implemented for {symbol}")
-            
-            # Generate sample data for demonstration
+            exchange = ccxt.kraken({'enableRateLimit': True})
+            # Kraken symbols are like 'BTC/USD', but may need mapping
+            kraken_symbol = symbol.replace('-', '/').upper()
+            # Kraken may use XBT for BTC, XDG for DOGE, etc.
+            currency_mapping = {'BTC': 'XBT', 'DOGE': 'XDG', 'LUNA': 'LUNA2'}
+            base, quote = kraken_symbol.split('/')
+            base = currency_mapping.get(base, base)
+            kraken_symbol = f"{base}/{quote}"
+            tf_value, tf_unit = 1, 'd'  # 1 day bars
+            timeframe = f"{tf_value}{tf_unit}"
+            since = int(start_date.timestamp() * 1000)
+            end_ts = int(end_date.timestamp() * 1000)
+            all_ohlcv = []
+            while since < end_ts:
+                ohlcv = exchange.fetch_ohlcv(kraken_symbol, timeframe, since=since, limit=1000)
+                if not ohlcv:
+                    break
+                all_ohlcv.extend(ohlcv)
+                last_ts = ohlcv[-1][0]
+                # Add 1 day (in ms) to avoid duplicate
+                since = last_ts + 24*60*60*1000
+                if len(ohlcv) < 1000:
+                    break
+            if not all_ohlcv:
+                logger.warning(f"No OHLCV data returned for {symbol} from Kraken.")
+                raise ValueError("No OHLCV data")
+            df = pd.DataFrame(all_ohlcv, columns=["timestamp", "open", "high", "low", "close", "volume"])
+            df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+            df.set_index("timestamp", inplace=True)
+            # Filter to requested date range
+            df = df[(df.index >= start_date) & (df.index <= end_date)]
+            return df[["open", "high", "low", "close", "volume"]]
+        except Exception as e:
+            logger.error(f"Error loading crypto data for {symbol} from Kraken: {e}. Using synthetic data.")
+            # Fallback to synthetic data
             dates = pd.date_range(start=start_date, end=end_date, freq='D')
             np.random.seed(42)  # For reproducible results
             
@@ -343,10 +375,6 @@ class BacktesterBot:
             }, index=dates)
             
             return df
-            
-        except Exception as e:
-            logger.error(f"Error loading crypto data for {symbol}: {e}")
-            return pd.DataFrame()
     
     def _run_simulation(self, config: BacktestConfig, historical_data: Dict[str, pd.DataFrame]):
         """Run the main backtest simulation"""

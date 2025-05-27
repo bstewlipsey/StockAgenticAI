@@ -108,9 +108,20 @@ class CryptoBot:
                 logger.warning(f"Rate limit hit for {symbol}, retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
                 time.sleep(wait_time)
             except ccxt.NetworkError as ne:
-                wait_time = min(60, delay)
-                logger.error(f"Network error for {symbol}: {ne}. Retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
-                time.sleep(wait_time)
+                if isinstance(ne, ccxt.ExchangeNotAvailable):
+                    wait_time = min(60, delay)
+                    logger.error(f"Exchange not available for {symbol}: {ne}. Retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    wait_time = min(60, delay)
+                    logger.error(f"Network error for {symbol}: {ne}. Retrying in {wait_time} seconds (attempt {retries+1}/{max_retries})...")
+                    time.sleep(wait_time)
+            except ccxt.InsufficientFunds as inf:
+                logger.error(f"Insufficient funds error for {symbol}: {inf}. Not retrying.")
+                return None
+            except ccxt.OrderNotFound as onf:
+                logger.error(f"Order not found error for {symbol}: {onf}. Not retrying.")
+                return None
             except ValueError as ve:
                 logger.error(f"Data error for {symbol}: {ve}. Not retrying.")
                 return None

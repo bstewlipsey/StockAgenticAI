@@ -254,24 +254,23 @@ class ReflectionBot:
     def _should_reflect_on_trade(self, trade_outcome: TradeOutcome) -> bool:
         """Determine if a trade warrants reflection"""
         
-        # Check if trade is significant enough
+        logger.info(f"Reflection threshold check: abs({trade_outcome.pnl_percent}) < {self.min_reflection_pnl}")
         if abs(trade_outcome.pnl_percent) < self.min_reflection_pnl:
             return False
-        
+
         # Check if trade is recent enough
         age_days = (datetime.now() - trade_outcome.exit_time).days
         if age_days > self.max_reflection_age_days:
             return False
-        
+
         # Check if we haven't already reflected on this trade
-        # Fetch insights for the symbol and filter by trade_id
         existing_insights = [
             insight for insight in self.database_bot.get_reflection_insights(symbol=trade_outcome.symbol)
             if insight.get('trade_id') == trade_outcome.trade_id
         ]
         if existing_insights:
             return False
-        
+
         return True
     
     def _gather_reflection_context(self, trade_outcome: TradeOutcome) -> Dict[str, Any]:
@@ -689,3 +688,22 @@ class ReflectionBot:
             
         except Exception as e:
             logger.error(f"Error storing reflection insights: {e}")
+    
+    def analyze_and_store(self, trade_outcome) -> List[ReflectionInsight]:
+        """
+        Analyze a trade, store insights, and validate persistence (per TODO 3.2).
+        """
+        # Generate insights using the main analysis pipeline
+        insights = self.analyze_completed_trade(trade_outcome)
+        if not insights:
+            logger.info(f"No insights generated for {trade_outcome.symbol}, nothing to store.")
+            return []
+
+        # Validate persistence: retrieve immediately after storing
+        persisted_insights = self.get_insights_for_symbol(trade_outcome.symbol, limit=10)
+        if persisted_insights:
+            logger.info(f"Validated persistence: {len(persisted_insights)} insights found for {trade_outcome.symbol} after storing.")
+        else:
+            logger.error(f"Persistence validation failed: No insights found for {trade_outcome.symbol} after storing.")
+
+        return persisted_insights if persisted_insights is not None else []

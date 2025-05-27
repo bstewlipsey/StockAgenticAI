@@ -45,6 +45,13 @@ DEFAULT_CRYPTO_TIMEFRAME = ("1", "d")   # (value, unit) for Kraken/CCXT or simil
 LOOKBACK_PERIOD = 100         # Number of candlesticks to analyze
 TRADING_CYCLE_INTERVAL = 60  # How often to check for trades (1 minute for testing)
 
+# Enable or disable quick testing mode
+TEST_MODE_ENABLED = False  # Set to True for rapid iteration/testing
+
+# Override interval for quick test mode
+if 'TEST_MODE_ENABLED' in globals() and TEST_MODE_ENABLED:
+    TRADING_CYCLE_INTERVAL = 5  # 5 seconds for rapid test mode
+
 # === LLM (AI) Configuration ===
 GEMINI_MODEL = "gemini-1.5-flash"  # Which Gemini model to use (updated to working model)
 MAX_TOKENS = 1000             # Maximum tokens for AI responses

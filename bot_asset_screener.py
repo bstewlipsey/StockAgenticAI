@@ -21,6 +21,10 @@ import numpy as np
 from bot_ai import AIBot
 from bot_database import DatabaseBot
 import config_trading as ctv
+from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
+from alpaca_trade_api import REST
+from alpaca_trade_api.rest import URL, TimeFrame, TimeFrameUnit
+import time
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -81,6 +85,14 @@ class AssetScreenerBot:
         # Asset universes for screening
         self.stock_universe = self._get_stock_universe()
         self.crypto_universe = self._get_crypto_universe()
+        
+        # Initialize Alpaca API
+        self.alpaca_api = REST(
+            key_id=ALPACA_API_KEY or "",
+            secret_key=ALPACA_SECRET_KEY or "",
+            base_url=URL(ALPACA_BASE_URL),
+            api_version='v2'
+        )
         
         self.logger.info(f"AssetScreenerBot initialized with {len(self.stock_universe)} stocks and {len(self.crypto_universe)} crypto assets")
     
@@ -162,14 +174,14 @@ class AssetScreenerBot:
     def _analyze_market_overview(self) -> MarketOverview:
         """Generate comprehensive market overview using technical and AI analysis"""
         try:
-            # Fetch market index data for sentiment analysis
-            spy_data = yf.download("SPY", period="30d", interval="1d")
-            vix_data = yf.download("^VIX", period="30d", interval="1d")
-            
-            # Calculate market metrics
-            spy_return = (spy_data['Close'].iloc[-1] / spy_data['Close'].iloc[0] - 1) * 100
-            current_vix = vix_data['Close'].iloc[-1]
-            avg_vix = vix_data['Close'].mean()
+            # Fetch market index data for sentiment analysis using Alpaca
+            spy_bars = self.alpaca_api.get_bars("SPY", TimeFrame(1, TimeFrameUnit.Day), limit=30)
+            vix_bars = self.alpaca_api.get_bars("VIXY", TimeFrame(1, TimeFrameUnit.Day), limit=30)  # Use VIXY ETF as proxy for VIX
+            spy_close = [bar.c for bar in spy_bars]
+            vix_close = [bar.c for bar in vix_bars]
+            spy_return = (spy_close[-1] / spy_close[0] - 1) * 100 if spy_close else 0
+            current_vix = vix_close[-1] if vix_close else 0
+            avg_vix = sum(vix_close) / len(vix_close) if vix_close else 0
             
             # Determine market sentiment based on technical indicators
             if spy_return > 5 and current_vix < avg_vix * 0.8:
@@ -191,11 +203,12 @@ class AssetScreenerBot:
             sector_performance = {}
             for sector, etf in sector_etfs.items():
                 try:
-                    data = yf.download(etf, period="5d", interval="1d")
-                    if not data.empty:
-                        perf = (data['Close'].iloc[-1] / data['Close'].iloc[0] - 1) * 100
+                    bars = self.alpaca_api.get_bars(etf, TimeFrame(1, TimeFrameUnit.Day), limit=5)
+                    closes = [bar.c for bar in bars]
+                    if closes:
+                        perf = (closes[-1] / closes[0] - 1) * 100
                         sector_performance[sector] = perf
-                except:
+                except Exception:
                     continue
             
             # Rank top performing sectors
@@ -263,58 +276,29 @@ class AssetScreenerBot:
     def _analyze_stock_candidate(self, symbol: str, market_overview: MarketOverview) -> Optional[AssetScreeningResult]:
         """Analyze individual stock candidate"""
         try:
-            # Fetch stock data
-            ticker = yf.Ticker(symbol)
-            hist_data = ticker.history(period="30d")
-            info = ticker.info
-            
-            if hist_data.empty:
+            bars = self.alpaca_api.get_bars(symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
+            closes = [bar.c for bar in bars]
+            volumes = [bar.v for bar in bars]
+            if not closes:
                 return None
-            
-            # Calculate technical metrics
-            current_price = hist_data['Close'].iloc[-1]
-            avg_volume = hist_data['Volume'].mean()
-            price_change_30d = (current_price / hist_data['Close'].iloc[0] - 1) * 100
-            
-            # Calculate volatility (standard deviation of returns)
-            returns = hist_data['Close'].pct_change().dropna()
-            volatility = returns.std() * np.sqrt(252) * 100  # Annualized
-            
-            # Market cap filtering
-            market_cap = info.get('marketCap', 0)
-            if market_cap < self.min_market_cap:
+            current_price = closes[-1]
+            avg_volume = sum(volumes) / len(volumes)
+            price_change_30d = (current_price / closes[0] - 1) * 100
+            returns = [(closes[i] / closes[i-1] - 1) for i in range(1, len(closes))]
+            volatility = (np.std(returns) * np.sqrt(252) * 100) if returns else 0
+            # Market cap and sector info not available from Alpaca, set to None/Unknown
+            market_cap = None
+            sector = 'Unknown'
+            if market_cap is not None and market_cap < self.min_market_cap:
                 return None
-            
-            # Volume filtering
             if avg_volume < self.min_avg_volume:
                 return None
-            
-            # Calculate momentum score (combines price performance and volume)
             momentum_score = min(100, max(0, 50 + price_change_30d * 2))
-            
-            # Calculate volume rank (relative to historical volume)
-            recent_volume = hist_data['Volume'].tail(5).mean()
-            volume_rank = min(100, (recent_volume / avg_volume) * 50)
-            
-            # Calculate base priority score
-            base_score = (momentum_score * 0.4 + volume_rank * 0.3 + 
-                         min(100, (market_cap / 1e10) * 10) * 0.3)
-            
-            # Adjust for market conditions
-            sector = info.get('sector', 'Unknown')
-            if sector in ['Technology', 'Healthcare'] and market_overview.market_sentiment == 'bullish':
-                base_score *= 1.2
-            elif sector == 'Energy' and market_overview.risk_environment == 'high':
-                base_score *= 1.1
-            
+            recent_volume = sum(volumes[-5:]) / min(5, len(volumes))
+            volume_rank = min(100, (recent_volume / avg_volume) * 50) if avg_volume > 0 else 50
+            base_score = (momentum_score * 0.4 + volume_rank * 0.3)
             priority_score = min(100, base_score)
-            
-            # Generate reasoning
-            reasoning = f"30d return: {price_change_30d:.1f}%, " \
-                       f"volatility: {volatility:.1f}%, " \
-                       f"volume rank: {volume_rank:.0f}, " \
-                       f"sector: {sector}"
-            
+            reasoning = f"30d return: {price_change_30d:.1f}%, volatility: {volatility:.1f}%, volume rank: {volume_rank:.0f}, sector: {sector}"
             return AssetScreeningResult(
                 symbol=symbol,
                 priority_score=priority_score,
@@ -326,7 +310,6 @@ class AssetScreenerBot:
                 sector=sector,
                 confidence=min(100, priority_score * 0.8)
             )
-            
         except Exception as e:
             self.logger.debug(f"Error analyzing stock {symbol}: {str(e)}")
             return None
@@ -349,153 +332,131 @@ class AssetScreenerBot:
     def _analyze_crypto_candidate(self, symbol: str, market_overview: MarketOverview) -> Optional[AssetScreeningResult]:
         """Analyze individual crypto candidate"""
         try:
-            # Fetch crypto data
-            hist_data = yf.download(symbol, period="30d", interval="1d")
-            
-            if hist_data.empty:
+            bars = self.alpaca_api.get_bars(symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
+            closes = [bar.c for bar in bars]
+            volumes = [bar.v for bar in bars]
+            if not closes:
                 return None
-            
-            # Log the raw data fetched for the crypto symbol
-            self.logger.info(f"[AssetScreenerBot] Raw data for {symbol}: {hist_data.tail()}")
-            
-            # Calculate technical metrics
-            current_price = hist_data['Close'].iloc[-1]
-            avg_volume = hist_data['Volume'].mean()
-            price_change_30d = (current_price / hist_data['Close'].iloc[0] - 1) * 100
-            
-            # Calculate volatility
-            returns = hist_data['Close'].pct_change().dropna()
-            volatility = returns.std() * np.sqrt(365) * 100  # Annualized for crypto
-            
-            # Calculate momentum score (crypto can be more volatile)
-            momentum_score = min(100, max(0, 50 + price_change_30d * 1.5))
-            
-            # Volume analysis (crypto has different volume patterns)
-            recent_volume = hist_data['Volume'].tail(5).mean()
-            volume_rank = min(100, (recent_volume / avg_volume) * 40) if avg_volume > 0 else 50
-            
-            # Base priority score for crypto
-            base_score = momentum_score * 0.5 + volume_rank * 0.3 + min(50, volatility) * 0.2
-            
-            # Adjust for market conditions (crypto often inverse to traditional markets)
-            if market_overview.market_sentiment == 'bearish' and 'BTC' in symbol:
-                base_score *= 1.1  # Bitcoin as digital gold during uncertainty
-            elif market_overview.risk_environment == 'low':
-                base_score *= 1.15  # Risk-on environment favors crypto
-            
+            current_price = closes[-1]
+            avg_volume = sum(volumes) / len(volumes)
+            price_change_30d = (current_price / closes[0] - 1) * 100
+            returns = [(closes[i] / closes[i-1] - 1) for i in range(1, len(closes))]
+            volatility = (np.std(returns) * np.sqrt(252) * 100) if returns else 0
+            # Market cap and sector info not available from Alpaca, set to None/Unknown
+            market_cap = None
+            sector = 'Unknown'
+            if market_cap is not None and market_cap < self.min_market_cap:
+                return None
+            if avg_volume < self.min_avg_volume:
+                return None
+            momentum_score = min(100, max(0, 50 + price_change_30d * 2))
+            recent_volume = sum(volumes[-5:]) / min(5, len(volumes))
+            volume_rank = min(100, (recent_volume / avg_volume) * 50) if avg_volume > 0 else 50
+            base_score = (momentum_score * 0.4 + volume_rank * 0.3)
             priority_score = min(100, base_score)
-            
-            reasoning = f"30d return: {price_change_30d:.1f}%, " \
-                       f"volatility: {volatility:.1f}%, " \
-                       f"volume activity: {volume_rank:.0f}"
-            
+            reasoning = f"30d return: {price_change_30d:.1f}%, volatility: {volatility:.1f}%, volume rank: {volume_rank:.0f}, sector: {sector}"
             return AssetScreeningResult(
                 symbol=symbol,
                 priority_score=priority_score,
                 reasoning=reasoning,
-                market_cap=None,  # Market cap not readily available for crypto
+                market_cap=market_cap,
                 volume_rank=volume_rank,
                 momentum_score=momentum_score,
                 volatility_score=volatility,
-                sector="Cryptocurrency",
-                confidence=min(100, priority_score * 0.7)  # Lower confidence for crypto
+                sector=sector,
+                confidence=min(100, priority_score * 0.8)
             )
-            
         except Exception as e:
             self.logger.debug(f"Error analyzing crypto {symbol}: {str(e)}")
             return None
     
-    def _apply_final_filters(self, results: List[AssetScreeningResult], 
-                           market_overview: MarketOverview) -> List[AssetScreeningResult]:
-        """Apply final filters and AI-enhanced selection"""
+    def _apply_final_filters(self, all_results: List[AssetScreeningResult], market_overview: MarketOverview) -> List[AssetScreeningResult]:
+        """
+        Apply final filters and selection criteria to the screened assets
+        
+        Args:
+            all_results: Combined list of all screened assets
+            market_overview: Current market overview information
+            
+        Returns:
+            Filtered and sorted list of AssetScreeningResult objects
+        """
         try:
-            # Filter out low-priority assets
-            filtered_results = [r for r in results if r.priority_score > 40]
+            # Example filter: Exclude assets from sectors with negative performance
+            filtered_results = [
+                result for result in all_results 
+                if result.sector in market_overview.top_sectors
+            ]
             
-            # Ensure diversity across asset types
-            stocks = [r for r in filtered_results if not r.symbol.endswith('-USD')]
-            crypto = [r for r in filtered_results if r.symbol.endswith('-USD')]
+            # Sort final selection by priority score
+            filtered_results.sort(key=lambda x: x.priority_score, reverse=True)
             
-            # Maintain balance: prefer 70% stocks, 30% crypto in normal conditions
-            if market_overview.risk_environment == 'low':
-                target_stocks = int(self.max_assets_to_screen * 0.7)
-                target_crypto = self.max_assets_to_screen - target_stocks
-            elif market_overview.risk_environment == 'high':
-                target_stocks = int(self.max_assets_to_screen * 0.8)  # More conservative
-                target_crypto = self.max_assets_to_screen - target_stocks
-            else:
-                target_stocks = int(self.max_assets_to_screen * 0.6)
-                target_crypto = self.max_assets_to_screen - target_stocks
-            
-            # Select top assets from each category
-            final_stocks = stocks[:target_stocks]
-            final_crypto = crypto[:target_crypto]
-            
-            return final_stocks + final_crypto
-            
+            return filtered_results[:self.max_assets_to_screen]
+        
         except Exception as e:
-            self.logger.error(f"Error in final filtering: {str(e)}")
-            return results[:self.max_assets_to_screen]
+            self.logger.error(f"Error applying final filters: {str(e)}")
+            return all_results[:self.max_assets_to_screen]  # Fallback to all results
     
-    def _store_screening_results(self, results: List[AssetScreeningResult], 
-                               market_overview: MarketOverview):
-        """Store screening results in database for analysis and learning"""
+    def _store_screening_results(self, final_selection: List[AssetScreeningResult], market_overview: MarketOverview):
+        """
+        Store the final screening results in the database
+        
+        Args:
+            final_selection: List of final selected assets
+            market_overview: Current market overview information
+        """
         try:
-            # Prepare screening data for storage
-            screening_data = {
-                'timestamp': datetime.now().isoformat(),
-                'market_sentiment': market_overview.market_sentiment,
-                'market_volatility': market_overview.market_volatility,
-                'risk_environment': market_overview.risk_environment,
-                'selected_assets': [r.symbol for r in results],
-                'screening_scores': {r.symbol: r.priority_score for r in results},
-                'ai_insights': market_overview.ai_insights
-            }
+            # Prepare data for storage
+            timestamp = datetime.now()
+            records = []
+            for result in final_selection:
+                records.append({
+                    "symbol": result.symbol,
+                    "priority_score": result.priority_score,
+                    "reasoning": result.reasoning,
+                    "market_cap": result.market_cap,
+                    "volume_rank": result.volume_rank,
+                    "momentum_score": result.momentum_score,
+                    "volatility_score": result.volatility_score,
+                    "sector": result.sector,
+                    "confidence": result.confidence,
+                    "timestamp": timestamp
+                })
             
-            # Store in database (assuming method exists or will be added)
-            # self.database_bot.store_screening_results(screening_data)
-            
-            self.logger.info(f"Stored screening results for {len(results)} assets")
-            
+            # Store in database
+            self.database_bot.store_screening_results(
+                market_sentiment=market_overview.market_sentiment,
+                market_volatility=market_overview.market_volatility,
+                risk_environment=market_overview.risk_environment,
+                selected_assets=[r.symbol for r in final_selection],
+                screening_scores={r.symbol: r.priority_score for r in final_selection},
+                ai_insights=market_overview.ai_insights,
+                top_sectors=market_overview.top_sectors
+            )
+            self.logger.info(f"Stored screening results for {len(records)} assets")
+        
         except Exception as e:
             self.logger.error(f"Error storing screening results: {str(e)}")
     
     def _get_fallback_assets(self) -> List[AssetScreeningResult]:
-        """Fallback to configured assets if screening fails"""
-        fallback_assets = []
-        
-        for asset in ctv.TRADING_ASSETS[:self.max_assets_to_screen]:
-            symbol = asset[0]
-            fallback_assets.append(AssetScreeningResult(
-                symbol=symbol,
-                priority_score=50.0,  # Neutral score
-                reasoning="Fallback selection from configured assets",
-                confidence=50.0
-            ))
-        
-        self.logger.warning(f"Using fallback asset selection: {[a.symbol for a in fallback_assets]}")
+        """Get fallback assets in case of screening errors"""
+        fallback_assets = [
+            AssetScreeningResult(symbol=symbol, priority_score=50, reasoning="Fallback asset", confidence=50)
+            for symbol in ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA"]
+        ]
         return fallback_assets
-    
-    def get_screening_history(self, days: int = 7) -> List[Dict]:
-        """Get historical screening results for analysis"""
-        try:
-            # This would query the database for past screening results
-            # return self.database_bot.get_screening_history(days)
-            return []
-        except Exception as e:
-            self.logger.error(f"Error retrieving screening history: {str(e)}")
-            return []
-    
-    def analyze_screening_performance(self) -> Dict[str, Any]:
-        """Analyze how well the screening process has performed"""
-        try:
-            # This would analyze the correlation between screening scores and actual performance
-            # Could be used to improve the screening algorithm over time
-            return {
-                'screening_accuracy': 0.0,
-                'top_performing_screens': [],
-                'improvement_suggestions': []
-            }
-        except Exception as e:
-            self.logger.error(f"Error analyzing screening performance: {str(e)}")
-            return {}
+
+    def run(self):
+        """Run the asset screener bot"""
+        self.logger.info("Asset Screener Bot starting")
+        while True:
+            try:
+                # Screen assets with current market conditions
+                self.screen_assets()
+                
+                # Wait for the next trading cycle
+                self.logger.info("Waiting for next trading cycle...")
+                time.sleep(60 * 15)  # 15 minute interval
+            except Exception as e:
+                self.logger.error(f"Error in bot loop: {str(e)}")
+                time.sleep(60)  # Wait before retrying

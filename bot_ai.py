@@ -148,4 +148,17 @@ class AIBot:
             response['reasoning'] = 'No reasoning provided.'
         return response
 
+    def build_prompt(asset_analysis_input):
+        prompt = f"""
+        Asset: {asset_analysis_input.symbol}
+        Reflection Insights:
+        {asset_analysis_input.reflection_insights}
+
+        Historical AI Context:
+        {asset_analysis_input.historical_ai_context}
+
+        # ...other prompt sections...
+        """
+        return prompt
+
 # === End of bot_ai.py ===

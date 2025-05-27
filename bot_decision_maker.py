@@ -37,6 +37,19 @@ class DecisionMakerBot:
         self.filters_enabled = FILTERS_ENABLED
         logger.info("DecisionMakerBot initialized successfully")
     
+    def log_prompt_context(self, analysis_input: AssetAnalysisInput, prompt: str):
+        """
+        Log the full prompt content sent to the AI, highlighting reflection_insights and historical_ai_context.
+        """
+        logger = logging.getLogger(__name__)
+        logger.debug("\n=== AI PROMPT SENT TO LLM ===\n" + prompt)
+        # Highlight RAG sections if present
+        if analysis_input.reflection_insights:
+            logger.debug("\n--- [RAG] Reflection Insights Section ---\n" + str(analysis_input.reflection_insights))
+        if analysis_input.historical_ai_context:
+            logger.debug("\n--- [RAG] Historical AI Context Section ---\n" + str(analysis_input.historical_ai_context))
+        logger.debug("\n=== END AI PROMPT ===\n")
+    
     def make_trading_decision(
         self, 
         analysis_input: AssetAnalysisInput,
@@ -115,6 +128,10 @@ class DecisionMakerBot:
                     'raw_technical_indicators': analysis_input.technical_indicators
                 }
             )
+        # Before returning, log the prompt context if available
+        prompt = getattr(analysis_input, 'full_prompt', None)
+        if prompt:
+            self.log_prompt_context(analysis_input, prompt)
     
     def batch_make_decisions(
         self,
@@ -130,3 +147,15 @@ class DecisionMakerBot:
             self.make_trading_decision(a, min_confidence, current_portfolio_risk, market_conditions)
             for a in analyses
         ]
+    
+    def prepare_asset_analysis_input(self, symbol):
+        # Retrieve recent insights and context
+        reflection_insights = self.database_bot.get_reflection_insights(symbol=symbol, limit=5)
+        historical_ai_context = self.database_bot.get_historical_ai_context(symbol=symbol, limit=5)
+        # ...existing code...
+        return AssetAnalysisInput(
+            symbol=symbol,
+            reflection_insights=reflection_insights,
+            historical_ai_context=historical_ai_context,
+            # ...other fields...
+        )
