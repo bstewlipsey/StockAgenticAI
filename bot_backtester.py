@@ -297,26 +297,34 @@ class BacktesterBot:
                 start=start_date.strftime('%Y-%m-%d'),
                 end=end_date.strftime('%Y-%m-%d'),
                 adjustment='raw'
-            )            
+            )
             if bars:
                 data = []
                 for bar in bars:
+                    # Defensive: Try multiple possible timestamp attributes
+                    ts = getattr(bar, 'timestamp', None)
+                    if ts is None:
+                        ts = getattr(bar, 't', None)
+                    if ts is None:
+                        ts = getattr(bar, 'start', None)
+                    if ts is None:
+                        # Fallback: use index or skip
+                        continue
                     data.append({
-                        'timestamp': bar.timestamp,
+                        'timestamp': ts,
                         'open': float(bar.open),
                         'high': float(bar.high),
                         'low': float(bar.low),
                         'close': float(bar.close),
                         'volume': int(bar.volume)
                     })
-                
+                if not data:
+                    return pd.DataFrame()
                 df = pd.DataFrame(data)
                 df['timestamp'] = pd.to_datetime(df['timestamp'])
                 df.set_index('timestamp', inplace=True)
                 return df
-            
             return pd.DataFrame()
-            
         except Exception as e:
             logger.error(f"Error loading stock data for {symbol}: {e}")
             return pd.DataFrame()

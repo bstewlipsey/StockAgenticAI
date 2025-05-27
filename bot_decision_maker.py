@@ -148,14 +148,14 @@ class DecisionMakerBot:
             for a in analyses
         ]
     
-    def prepare_asset_analysis_input(self, symbol):
-        # Retrieve recent insights and context
-        reflection_insights = self.database_bot.get_reflection_insights(symbol=symbol, limit=5)
-        historical_ai_context = self.database_bot.get_historical_ai_context(symbol=symbol, limit=5)
-        # ...existing code...
-        return AssetAnalysisInput(
-            symbol=symbol,
-            reflection_insights=reflection_insights,
-            historical_ai_context=historical_ai_context,
-            # ...other fields...
-        )
+    # def prepare_asset_analysis_input(self, symbol):
+    #     # Retrieve recent insights and context
+    #     reflection_insights = self.database_bot.get_reflection_insights(symbol=symbol, limit=5)
+    #     historical_ai_context = self.database_bot.get_historical_ai_context(symbol=symbol, limit=5)
+    #     # ...existing code...
+    #     return AssetAnalysisInput(
+    #         symbol=symbol,
+    #         reflection_insights=reflection_insights,
+    #         historical_ai_context=historical_ai_context,
+    #         # ...other fields...
+    #     )

@@ -43,6 +43,7 @@ class AssetAnalysisInput:
     news_sentiment: Optional[Dict[str, Any]] = None # e.g., {'overall_sentiment': 'positive', 'key_articles': [...]}
     reflection_insights: Optional[List[str]] = None # Relevant past reflections
     historical_ai_context: Optional[List[Dict[str, Any]]] = None # Past AI decisions/analyses for this symbol
+    asset_type: Optional[str] = None  # Added for orchestrator/test compatibility
 
 @dataclass(frozen=True)
 class TradeOutcome:
@@ -87,3 +88,17 @@ class MarketSnapshot:
     top_sectors: List[str]
     trending_assets: List[str]
     additional_data: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class AssetScreeningResult:
+    """Structured result from asset screening analysis"""
+    symbol: str
+    priority_score: float  # 0-100, higher is better
+    reasoning: str
+    market_cap: Optional[float] = None
+    volume_rank: Optional[float] = None
+    momentum_score: Optional[float] = None
+    volatility_score: Optional[float] = None
+    sector: Optional[str] = None
+    confidence: float = 0.0
+    asset_type: str = "stock"  # Default to stock, set to 'crypto' for crypto assets

@@ -46,7 +46,7 @@ LOOKBACK_PERIOD = 100         # Number of candlesticks to analyze
 TRADING_CYCLE_INTERVAL = 60  # How often to check for trades (1 minute for testing)
 
 # Enable or disable quick testing mode
-TEST_MODE_ENABLED = False  # Set to True for rapid iteration/testing
+TEST_MODE_ENABLED = True  # Set to True for rapid iteration/testing
 
 # Override interval for quick test mode
 if 'TEST_MODE_ENABLED' in globals() and TEST_MODE_ENABLED:

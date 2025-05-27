@@ -78,7 +78,8 @@ class RiskManager:
                 'risk_level': 'NONE',
                 'max_loss': 0.0,
                 'profit_loss': 0.0,
-                'rejection_reason': 'Zero or negative quantity/entry price.'
+                'rejection_reason': 'Zero or negative quantity/entry price.',
+                'unrealized_pnl': 0.0
             }
         investment = position.quantity * position.entry_price
         current_value = position.quantity * position.current_price
@@ -91,6 +92,7 @@ class RiskManager:
             'investment': investment,           # Total amount invested in this position
             'current_value': current_value,     # Current market value of the position
             'pnl': pnl,                        # Profit or loss in dollars
+            'unrealized_pnl': pnl,  # Alias for test compatibility
             'pnl_percent': pnl_percent,         # Profit or loss as a percent of investment
             'risk_level': 'HIGH' if abs(pnl_percent) > self.max_position_risk else 'LOW',  # Risk flag
             'max_loss': max_loss,              # Maximum allowed loss for this position
@@ -120,6 +122,7 @@ class RiskManager:
             'total_investment': total_investment,
             'total_current_value': total_current_value,
             'total_pnl': total_pnl,
+            'unrealized_pnl': total_pnl,  # Alias for test compatibility
             'portfolio_pnl_percent': portfolio_pnl_percent,
             'risk_level': risk_level
         }

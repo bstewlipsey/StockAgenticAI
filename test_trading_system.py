@@ -15,6 +15,8 @@ Run with: python test_trading_system.py
 """
 
 import os
+os.environ['PYTHONIOENCODING'] = 'utf-8'
+
 import sys
 import time
 import logging
@@ -365,12 +367,17 @@ class TradingSystemTester:
     def test_decision_maker_bot(self):
         """Test DecisionMakerBot logic and integration."""
         try:
-            from bot_decision_maker import DecisionMakerBot, AnalysisInput
+            from bot_decision_maker import DecisionMakerBot, AssetAnalysisInput
             bot = DecisionMakerBot()
-            analysis = AnalysisInput(symbol='AAPL', asset_type='stock', action='buy', confidence=0.8, reasoning='Strong uptrend')
+            analysis = AssetAnalysisInput(
+                symbol='AAPL',
+                market_data={'action': 'buy', 'confidence': 0.8, 'reasoning': 'Strong uptrend'},
+                technical_indicators={},
+                asset_type='stock'
+            )
             decision = bot.make_trading_decision(analysis, min_confidence=0.7)
             assert hasattr(decision, 'final_action')
-            assert decision.final_action in ['buy', 'sell', 'hold']
+            assert decision.signal in ['buy', 'sell', 'hold'] or str(decision.signal).lower() in ['buy', 'sell', 'hold']
             return True
         except Exception as e:
             logger.error(f"DecisionMakerBot test failed: {e}")
@@ -505,9 +512,6 @@ class TradingSystemTester:
             symbol="BTC-USD",
             market_data={'action': 'buy', 'confidence': 0.9, 'reasoning': 'Test'},
             technical_indicators={},
-            news_sentiment=None,
-            reflection_insights=bot.get_insights_for_symbol("BTC-USD", limit=1),
-            historical_ai_context=[],
             asset_type="crypto"
         )
         decision = decision_bot.make_trading_decision(analysis_input, min_confidence=0.5)

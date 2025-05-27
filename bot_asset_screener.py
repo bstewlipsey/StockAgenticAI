@@ -41,6 +41,7 @@ class AssetScreeningResult:
     volatility_score: Optional[float] = None
     sector: Optional[str] = None
     confidence: float = 0.0
+    asset_type: str = 'stock'  # Default to 'stock', set to 'crypto' for crypto assets
 
 @dataclass
 class MarketOverview:
@@ -179,7 +180,7 @@ class AssetScreenerBot:
             vix_bars = self.alpaca_api.get_bars("VIXY", TimeFrame(1, TimeFrameUnit.Day), limit=30)  # Use VIXY ETF as proxy for VIX
             spy_close = [bar.c for bar in spy_bars]
             vix_close = [bar.c for bar in vix_bars]
-            spy_return = (spy_close[-1] / spy_close[0] - 1) * 100 if spy_close else 0
+            spy_return = (spy_close[-1] / spy_close[0] - 1) * 100 if spy_close and spy_close[0] != 0 else 0
             current_vix = vix_close[-1] if vix_close else 0
             avg_vix = sum(vix_close) / len(vix_close) if vix_close else 0
             
@@ -206,7 +207,7 @@ class AssetScreenerBot:
                     bars = self.alpaca_api.get_bars(etf, TimeFrame(1, TimeFrameUnit.Day), limit=5)
                     closes = [bar.c for bar in bars]
                     if closes:
-                        perf = (closes[-1] / closes[0] - 1) * 100
+                        perf = (closes[-1] / closes[0] - 1) * 100 if closes[0] != 0 else 0
                         sector_performance[sector] = perf
                 except Exception:
                     continue
@@ -279,14 +280,13 @@ class AssetScreenerBot:
             bars = self.alpaca_api.get_bars(symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
             closes = [bar.c for bar in bars]
             volumes = [bar.v for bar in bars]
-            if not closes:
+            if not closes or not volumes:
                 return None
             current_price = closes[-1]
             avg_volume = sum(volumes) / len(volumes)
-            price_change_30d = (current_price / closes[0] - 1) * 100
+            price_change_30d = (current_price / closes[0] - 1) * 100 if closes[0] != 0 else 0
             returns = [(closes[i] / closes[i-1] - 1) for i in range(1, len(closes))]
             volatility = (np.std(returns) * np.sqrt(252) * 100) if returns else 0
-            # Market cap and sector info not available from Alpaca, set to None/Unknown
             market_cap = None
             sector = 'Unknown'
             if market_cap is not None and market_cap < self.min_market_cap:
@@ -294,7 +294,7 @@ class AssetScreenerBot:
             if avg_volume < self.min_avg_volume:
                 return None
             momentum_score = min(100, max(0, 50 + price_change_30d * 2))
-            recent_volume = sum(volumes[-5:]) / min(5, len(volumes))
+            recent_volume = sum(volumes[-5:]) / min(5, len(volumes)) if len(volumes) >= 5 else avg_volume
             volume_rank = min(100, (recent_volume / avg_volume) * 50) if avg_volume > 0 else 50
             base_score = (momentum_score * 0.4 + volume_rank * 0.3)
             priority_score = min(100, base_score)
@@ -308,7 +308,8 @@ class AssetScreenerBot:
                 momentum_score=momentum_score,
                 volatility_score=volatility,
                 sector=sector,
-                confidence=min(100, priority_score * 0.8)
+                confidence=min(100, priority_score * 0.8),
+                asset_type='stock'
             )
         except Exception as e:
             self.logger.debug(f"Error analyzing stock {symbol}: {str(e)}")
@@ -335,14 +336,13 @@ class AssetScreenerBot:
             bars = self.alpaca_api.get_bars(symbol, TimeFrame(1, TimeFrameUnit.Day), limit=30)
             closes = [bar.c for bar in bars]
             volumes = [bar.v for bar in bars]
-            if not closes:
+            if not closes or not volumes:
                 return None
             current_price = closes[-1]
             avg_volume = sum(volumes) / len(volumes)
-            price_change_30d = (current_price / closes[0] - 1) * 100
+            price_change_30d = (current_price / closes[0] - 1) * 100 if closes[0] != 0 else 0
             returns = [(closes[i] / closes[i-1] - 1) for i in range(1, len(closes))]
             volatility = (np.std(returns) * np.sqrt(252) * 100) if returns else 0
-            # Market cap and sector info not available from Alpaca, set to None/Unknown
             market_cap = None
             sector = 'Unknown'
             if market_cap is not None and market_cap < self.min_market_cap:
@@ -350,7 +350,7 @@ class AssetScreenerBot:
             if avg_volume < self.min_avg_volume:
                 return None
             momentum_score = min(100, max(0, 50 + price_change_30d * 2))
-            recent_volume = sum(volumes[-5:]) / min(5, len(volumes))
+            recent_volume = sum(volumes[-5:]) / min(5, len(volumes)) if len(volumes) >= 5 else avg_volume
             volume_rank = min(100, (recent_volume / avg_volume) * 50) if avg_volume > 0 else 50
             base_score = (momentum_score * 0.4 + volume_rank * 0.3)
             priority_score = min(100, base_score)
@@ -364,7 +364,8 @@ class AssetScreenerBot:
                 momentum_score=momentum_score,
                 volatility_score=volatility,
                 sector=sector,
-                confidence=min(100, priority_score * 0.8)
+                confidence=min(100, priority_score * 0.8),
+                asset_type='crypto'
             )
         except Exception as e:
             self.logger.debug(f"Error analyzing crypto {symbol}: {str(e)}")

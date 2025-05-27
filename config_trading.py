@@ -12,9 +12,6 @@ TOTAL_CAPITAL = 100000.0
 # === Assets to Trade & Per-Asset USD Allocation (Combined) ===
 TRADING_ASSETS = [
     ("AAPL",    "stock", 500),
-    ("GOOGL",   "stock", 500),
-    ("NVDA",    "stock", 500),
-    ("MSFT",    "stock", 500),
     ("BTC/USD", "crypto", 200)
 ]
 
