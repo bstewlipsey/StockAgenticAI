@@ -361,7 +361,7 @@ class ReflectionBot:
             
             # Use .format() only if there are actual format fields, otherwise pass as is
             ai_response = self.ai_bot.generate_analysis(
-                prompt_template=reflection_prompt,
+                prompt_type=reflection_prompt,
                 variables={"analysis_schema": ANALYSIS_SCHEMA}
             )
             
