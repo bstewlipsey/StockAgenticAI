@@ -14,7 +14,7 @@ def main():
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
 
-    print(f"\n{Style.BRIGHT}🤖 Starting StockAgenticAI...{Style.RESET_ALL}")
+    print(f"\n{Style.BRIGHT}[AI] Starting StockAgenticAI...{Style.RESET_ALL}")
 
     # Instantiate the orchestrator and start the trading loop
     orchestrator = OrchestratorBot()

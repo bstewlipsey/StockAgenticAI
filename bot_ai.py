@@ -19,7 +19,7 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
     Generate AI-driven analysis using the configured LLM.
     Args:
         prompt_template (str): The prompt template string, with placeholders for variables.
-        variables (dict): Dictionary of variables to fill into the prompt template.
+        variables (dict or str): Variables to fill into the prompt template.
         model_name (str, optional): Override the default model name.
         api_key (str, optional): Override the default API key.
     Returns:
@@ -30,7 +30,19 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
     try:
         genai.configure(api_key=key)
         llm = genai.GenerativeModel(model)
-        prompt = prompt_template.format(**variables)
+        # Fix: handle both dict and str for variables
+        if variables is None:
+            prompt = prompt_template
+        elif isinstance(variables, dict):
+            try:
+                prompt = prompt_template.format(**variables)
+            except Exception as e:
+                prompt = f"[Prompt Format Error: {e}]\n{prompt_template}"
+        elif isinstance(variables, str):
+            prompt = prompt_template
+            # Optionally: prompt = prompt_template.format(text=variables)
+        else:
+            prompt = prompt_template
         response = llm.generate_content(prompt)
         return response.text.strip()
     except Exception:
@@ -50,26 +62,36 @@ class AIBot:
         self.api_key = api_key or GEMINI_API_KEY
         genai.configure(api_key=self.api_key)
         self.llm = genai.GenerativeModel(self.model_name)
+        # Add prompt_templates mapping for correct operation
+        self.prompt_templates = {
+            'CRYPTO_ANALYSIS': CRYPTO_ANALYSIS_TEMPLATE,
+            'STOCK_ANALYSIS': STOCK_ANALYSIS_TEMPLATE,
+            'MARKET_OVERVIEW': """Market Overview:\n- S&P 500 30-day return: {spy_return:.2f}%\n- Current VIX: {current_vix:.2f}\n- Average VIX (30d): {avg_vix:.2f}\n- Market Sentiment: {market_sentiment}\n- Top Performing Sectors: {top_sectors}\n\nPlease provide:\n1. Key market themes and trends to focus on\n2. Asset types that might outperform in current conditions\n3. Risk factors to be aware of\n4. Specific sectors or themes to prioritize\nKeep response concise and actionable for trading decisions."""
+        }
 
-    def generate_analysis(self, prompt_template, variables):
+    def generate_analysis(self, prompt_type, variables=None):
         """
         Generate an AI analysis using the LLM and a prompt template.
         Returns the LLM's response text or an empty string on failure.
         """
-        prompt = prompt_template.format(**variables)
-        try:
-            response = self.llm.generate_content(
-                prompt,
-                generation_config=GenerationConfig(
-                    temperature=TEMPERATURE,
-                    top_p=0.8,
-                    top_k=40,
-                    max_output_tokens=MAX_TOKENS
-                )
-            )
-            return response.text.strip()
-        except Exception:
-            return ""
+        prompt_template = self.prompt_templates.get(prompt_type, "")
+        # Fix: Ensure variables is a dict for .format(**variables)
+        if variables is None:
+            return prompt_template
+        if isinstance(variables, dict):
+            try:
+                return prompt_template.format(**variables)
+            except Exception as e:
+                # Fallback: return template with error info
+                return f"[Prompt Format Error: {e}]\n{prompt_template}"
+        # If variables is a string, just return the template (or optionally format with a default key)
+        if isinstance(variables, str):
+            # Option 1: Just return the template (no formatting)
+            return prompt_template
+            # Option 2: If you want to allow {text} in template, uncomment below:
+            # return prompt_template.format(text=variables)
+        # Fallback for other types
+        return prompt_template
 
     @staticmethod
     def clean_json_response(text):

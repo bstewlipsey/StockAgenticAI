@@ -102,3 +102,4 @@ class AssetScreeningResult:
     sector: Optional[str] = None
     confidence: float = 0.0
     asset_type: str = "stock"  # Default to stock, set to 'crypto' for crypto assets
+    allocation_usd: Optional[float] = None  # USD allocation for this asset

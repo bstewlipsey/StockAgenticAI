@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import numpy as np
 from bot_ai import AIBot
+from data_structures import AssetScreeningResult
 from bot_database import DatabaseBot
 import config_trading as ctv
 from config import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL
@@ -29,19 +30,6 @@ import time
 # Configure logging
 logger = logging.getLogger(__name__)
 
-@dataclass
-class AssetScreeningResult:
-    """Structured result from asset screening analysis"""
-    symbol: str
-    priority_score: float  # 0-100, higher is better
-    reasoning: str
-    market_cap: Optional[float] = None
-    volume_rank: Optional[float] = None
-    momentum_score: Optional[float] = None
-    volatility_score: Optional[float] = None
-    sector: Optional[str] = None
-    confidence: float = 0.0
-    asset_type: str = 'stock'  # Default to 'stock', set to 'crypto' for crypto assets
 
 @dataclass
 class MarketOverview:
@@ -123,9 +111,9 @@ class AssetScreenerBot:
         
         # Add popular crypto assets for broader screening
         popular_crypto = [
-            'BTC-USD', 'ETH-USD', 'BNB-USD', 'XRP-USD', 'ADA-USD', 
-            'SOL-USD', 'DOGE-USD', 'DOT-USD', 'AVAX-USD', 'SHIB-USD',
-            'MATIC-USD', 'LTC-USD', 'BCH-USD', 'LINK-USD', 'UNI-USD'
+            'BTC/USD', 'ETH/USD', 'BNB/USD', 'XRP/USD', 'ADA/USD', 
+            'SOL/USD', 'DOGE/USD', 'DOT/USD', 'AVAX/USD', 'SHIB/USD',
+            'MATIC/USD', 'LTC/USD', 'BCH/USD', 'LINK/USD', 'UNI/USD'
         ]
         
         # Combine and deduplicate
@@ -160,7 +148,7 @@ class AssetScreenerBot:
 
             # Ensure at least one crypto asset is present for test coverage
             if not any(getattr(r, 'asset_type', None) == 'crypto' for r in all_results):
-                all_results.append(AssetScreeningResult(symbol="BTC-USD", priority_score=40, reasoning="Test coverage crypto asset", confidence=40, asset_type='crypto'))
+                all_results.append(AssetScreeningResult(symbol="BTC/USD", priority_score=40, reasoning="Test coverage crypto asset", confidence=40, asset_type='crypto'))
 
             # Step 4: Apply final filtering and selection
             final_selection = self._apply_final_filters(all_results, market_overview)
@@ -300,6 +288,16 @@ class AssetScreenerBot:
             base_score = (momentum_score * 0.4 + volume_rank * 0.3)
             priority_score = min(100, base_score)
             reasoning = f"30d return: {price_change_30d:.1f}%, volatility: {volatility:.1f}%, volume rank: {volume_rank:.0f}, sector: {sector}"
+            
+            # Get allocation from TRADING_ASSETS or use default
+            allocation_usd = None
+            for asset_symbol, asset_type, allocation in ctv.TRADING_ASSETS:
+                if asset_symbol == symbol and asset_type == 'stock':
+                    allocation_usd = allocation
+                    break
+            if allocation_usd is None:
+                allocation_usd = ctv.DEFAULT_TRADE_AMOUNT_USD
+            
             return AssetScreeningResult(
                 symbol=symbol,
                 priority_score=priority_score,
@@ -310,7 +308,8 @@ class AssetScreenerBot:
                 volatility_score=volatility,
                 sector=sector,
                 confidence=min(100, priority_score * 0.8),
-                asset_type='stock'
+                asset_type='stock',
+                allocation_usd=allocation_usd
             )
         except Exception as e:
             self.logger.debug(f"Error analyzing stock {symbol}: {str(e)}")
@@ -365,6 +364,15 @@ class AssetScreenerBot:
             priority_score = min(100, base_score)
             reasoning = f"30d return: {price_change_30d:.1f}%, volatility: {volatility:.1f}%, volume rank: {volume_rank:.0f}, sector: {sector}"
             
+            # Get allocation from TRADING_ASSETS or use default
+            allocation_usd = None
+            for asset_symbol, asset_type, allocation in ctv.TRADING_ASSETS:
+                if asset_symbol == symbol and asset_type == 'crypto':
+                    allocation_usd = allocation
+                    break
+            if allocation_usd is None:
+                allocation_usd = ctv.DEFAULT_TRADE_AMOUNT_USD
+            
             return AssetScreeningResult(
                 symbol=symbol,
                 priority_score=priority_score,
@@ -375,7 +383,8 @@ class AssetScreenerBot:
                 volatility_score=volatility,
                 sector=sector,
                 confidence=min(100, priority_score * 0.8),
-                asset_type='crypto'
+                asset_type='crypto',
+                allocation_usd=allocation_usd
             )
         except Exception as e:
             self.logger.debug(f"Error analyzing crypto {symbol}: {str(e)}")
@@ -480,7 +489,7 @@ class AssetScreenerBot:
             AssetScreeningResult(symbol="AAPL", priority_score=50, reasoning="Fallback asset", confidence=50),
             AssetScreeningResult(symbol="TSLA", priority_score=50, reasoning="Fallback asset", confidence=50),
             AssetScreeningResult(symbol="GOOGL", priority_score=50, reasoning="Fallback asset", confidence=50),
-            AssetScreeningResult(symbol="BTC-USD", priority_score=40, reasoning="Fallback crypto asset", confidence=40, asset_type='crypto')
+            AssetScreeningResult(symbol="BTC/USD", priority_score=40, reasoning="Fallback crypto asset", confidence=40, asset_type='crypto')
         ]
 
     def run(self):

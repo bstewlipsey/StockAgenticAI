@@ -491,7 +491,7 @@ class TradingSystemTester:
         bot = ReflectionBot()
         trade = TradeOutcome(
             trade_id="T3",
-            symbol="BTC-USD",
+            symbol="BTC/USD",
             asset_type="crypto",
             action="buy",
             entry_price=30000.0,
@@ -510,7 +510,7 @@ class TradingSystemTester:
         decision_bot = DecisionMakerBot()
         # Compose AssetAnalysisInput with minimal required fields
         analysis_input = AssetAnalysisInput(
-            symbol="BTC-USD",
+            symbol="BTC/USD",
             market_data={'action': 'buy', 'confidence': 0.9, 'reasoning': 'Test'},
             technical_indicators={},
             asset_type="crypto"

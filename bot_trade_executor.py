@@ -197,7 +197,7 @@ class TradeExecutorBot:
             account = self.api.get_account()
             
             # Log successful account retrieval (at debug level to avoid spam)
-            self.logger.debug("✅ Account information retrieved successfully")
+            self.logger.debug("[OK] Account information retrieved successfully")
             
             return account
             

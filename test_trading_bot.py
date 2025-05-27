@@ -63,13 +63,12 @@ except Exception as e:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def safe_print(msg):
-    # Replace common emoji with ASCII
+def safe_print(msg):    # Replace common emoji with ASCII
     replacements = {
-        '✅': '[PASS]',
-        '❌': '[FAIL]',
-        '📊': '[INFO]',
-        '⚠️': '[WARN]',
+        '[PASS]': '[PASS]',
+        '[FAIL]': '[FAIL]',
+        '[INFO]': '[INFO]',
+        '[WARN]': '[WARN]',
     }
     for k, v in replacements.items():
         msg = msg.replace(k, v)
@@ -121,11 +120,11 @@ class TradingBotTester:
             model = genai.GenerativeModel(GEMINI_MODEL)
             response = model.generate_content("Hello, respond with 'API Working'")
             if "API Working" in response.text or "working" in response.text.lower():
-                print("   ✅ Gemini API: Connected")
+                print("   [OK] Gemini API: Connected")
             else:
-                print(f"   ⚠️ Gemini API: Unexpected response: {response.text}")
+                print(f"   [WARN] Gemini API: Unexpected response: {response.text}")
         except Exception as e:
-            print(f"   ❌ Gemini API: {e}")
+            print(f"   [FAIL] Gemini API: {e}")
             return False
         
         # Test Alpaca API
@@ -137,18 +136,18 @@ class TradingBotTester:
                 api_version='v2'
             )
             account = api.get_account()
-            print(f"   ✅ Alpaca API: Connected (Account: {account.status})")
+            print(f"   [OK] Alpaca API: Connected (Account: {account.status})")
         except Exception as e:
-            print(f"   ❌ Alpaca API: {e}")
+            print(f"   [FAIL] Alpaca API: {e}")
             return False
         
         # Test Kraken API
         try:
             crypto_exchange = ccxt.kraken({'enableRateLimit': True})
             crypto_exchange.load_markets()
-            print("   ✅ Kraken API: Connected")
+            print("   [OK] Kraken API: Connected")
         except Exception as e:
-            print(f"   ❌ Kraken API: {e}")
+            print(f"   [FAIL] Kraken API: {e}")
             return False
         
         return True
@@ -174,10 +173,10 @@ class TradingBotTester:
             
             # Test retrieving analysis
             history = self.db.get_analysis_history('TEST')
-            print(f"   ✅ Database: Save/retrieve working ({len(history)} records)")
+            print(f"   [OK] Database: Save/retrieve working ({len(history)} records)")
             return True
         except Exception as e:
-            print(f"   ❌ Database: {e}")
+            print(f"   [FAIL] Database: {e}")
             return False
     
     def test_technical_indicators(self):
@@ -188,17 +187,16 @@ class TradingBotTester:
             
             bot = IndicatorBot(sample_prices)
             indicators = bot.calculate_indicators()
-            
             required_indicators = ['rsi', 'macd', 'sma_20']
             for indicator in required_indicators:
                 if indicator not in indicators:
-                    print(f"   ❌ Missing indicator: {indicator}")
+                    print(f"   [FAIL] Missing indicator: {indicator}")
                     return False
             
-            print(f"   ✅ Technical Indicators: RSI={indicators['rsi']:.2f}, MACD={indicators['macd']:.2f}")
+            print(f"   [OK] Technical Indicators: RSI={indicators['rsi']:.2f}, MACD={indicators['macd']:.2f}")
             return True
         except Exception as e:
-            print(f"   ❌ Technical Indicators: {e}")
+            print(f"   [FAIL] Technical Indicators: {e}")
             return False
     
     def test_risk_management(self):
@@ -216,17 +214,16 @@ class TradingBotTester:
             )
             
             risk_metrics = risk_manager.calculate_position_risk(test_position)
-            
             required_metrics = ['risk_level', 'max_loss', 'profit_loss']
             for metric in required_metrics:
                 if metric not in risk_metrics:
-                    print(f"   ❌ Missing risk metric: {metric}")
+                    print(f"   [FAIL] Missing risk metric: {metric}")
                     return False
             
-            print(f"   ✅ Risk Management: Level={risk_metrics['risk_level']}, P&L=${risk_metrics['profit_loss']:.2f}")
+            print(f"   [OK] Risk Management: Level={risk_metrics['risk_level']}, P&L=${risk_metrics['profit_loss']:.2f}")
             return True
         except Exception as e:
-            print(f"   ❌ Risk Management: {e}")
+            print(f"   [FAIL] Risk Management: {e}")
             return False
     
     def test_portfolio_management(self):
@@ -236,11 +233,10 @@ class TradingBotTester:
             
             # Test portfolio metrics
             metrics = portfolio.get_portfolio_metrics()
-            
-            print(f"   ✅ Portfolio Management: Total Value=${metrics.get('total_value', 0):.2f}")
+            print(f"   [OK] Portfolio Management: Total Value=${metrics.get('total_value', 0):.2f}")
             return True
         except Exception as e:
-            print(f"   ❌ Portfolio Management: {e}")
+            print(f"   [FAIL] Portfolio Management: {e}")
             return False
     
     def test_crypto_data(self):
@@ -248,15 +244,13 @@ class TradingBotTester:
         try:
             exchange = ccxt.kraken({'enableRateLimit': True})
             ticker = exchange.fetch_ticker('BTC/USD')
-            
             if 'last' in ticker:
-                print(f"   ✅ Crypto Data: BTC/USD price=${ticker['last']:.2f}")
+                print(f"   [OK] Crypto Data: BTC/USD price=${ticker['last']:.2f}")
                 return True
             else:
-                print(f"   ❌ Crypto Data: Invalid response: {ticker}")
-                return False
-        except Exception as e:
-            print(f"   ❌ Crypto Data: {e}")
+                print(f"   [FAIL] Crypto Data: Invalid response: {ticker}")
+                return False        except Exception as e:
+            print(f"   [FAIL] Crypto Data: {e}")
             return False
     
     def test_ai_analysis(self):
@@ -269,7 +263,7 @@ class TradingBotTester:
             result = ai.generate_analysis(prompt, variables)
             return isinstance(result, str) and len(result) > 0
         except Exception as e:
-            print(f"   ❌ AI Analysis: {e}")
+            print(f"   [FAIL] AI Analysis: {e}")
             return False
     
     def test_trade_execution(self):
@@ -284,16 +278,15 @@ class TradingBotTester:
                 quantity=1,
                 confidence=0.8
             )
-            
             if success:
-                print("   ✅ Trade Execution: Paper trade successful")
+                print("   [OK] Trade Execution: Paper trade successful")
                 return True
             else:
-                print(f"   ⚠️ Trade Execution: Paper trade failed: {order}")
+                print(f"   [WARN] Trade Execution: Paper trade failed: {order}")
                 # Don't fail the test for execution issues during market hours
                 return True
         except Exception as e:
-            print(f"   ❌ Trade Execution: {e}")
+            print(f"   [FAIL] Trade Execution: {e}")
             # Don't fail the test for execution issues during market hours
             return True
     
@@ -305,7 +298,7 @@ class TradingBotTester:
                 start_date=datetime(2022, 1, 1),
                 end_date=datetime(2022, 3, 1),
                 initial_capital=10000.0,
-                assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC-USD', 'crypto', 5000.0)]
+                assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC/USD', 'crypto', 5000.0)]
             )
             
             backtester = BacktesterBot()
@@ -318,13 +311,12 @@ class TradingBotTester:
             assert isinstance(result.performance_metrics['total_return'], float)
             assert isinstance(result.performance_metrics['win_rate'], float)
             assert isinstance(result.performance_metrics['max_drawdown'], float)
-            # Check if trade history and portfolio history are available
-            assert isinstance(result.trade_history, list)
+            # Check if trade history and portfolio history are available            assert isinstance(result.trade_history, list)
             assert isinstance(result.portfolio_history, list)
-            print("   ✅ BacktesterBot: Simple backtest completed successfully")
+            print("   [OK] BacktesterBot: Simple backtest completed successfully")
             return True
         except Exception as e:
-            print(f"   ❌ BacktesterBot: {e}")
+            print(f"   [FAIL] BacktesterBot: {e}")
             return False
     
     def print_summary(self):
@@ -377,7 +369,7 @@ class TestBacktesterBot(unittest.TestCase):
             start_date=datetime(2022, 1, 1),
             end_date=datetime(2022, 1, 10),
             initial_capital=10000.0,
-            assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC-USD', 'crypto', 5000.0)]
+            assets_to_test=[('AAPL', 'stock', 5000.0), ('BTC/USD', 'crypto', 5000.0)]
         )
         backtester = BacktesterBot()
         result = backtester.run_backtest(config)

@@ -51,7 +51,7 @@ class OrchestratorBot:
     
     def __init__(self):
         """Initialize all specialized bots and components"""
-        logger.info("🤖 Initializing OrchestratorBot...")
+        logger.info("[AI] Initializing OrchestratorBot...")
         
         # Initialize all specialized bots
         self.stock_bot = StockBot()
@@ -80,7 +80,7 @@ class OrchestratorBot:
         self.cycle_interval = TRADING_CYCLE_INTERVAL
         self.running = False
         
-        logger.info("✅ OrchestratorBot initialized successfully")
+        logger.info("[OK] OrchestratorBot initialized successfully")
     
     def start_trading_loop(self):
         """Start the main agentic trading loop"""
