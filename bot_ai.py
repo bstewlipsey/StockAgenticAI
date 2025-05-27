@@ -148,16 +148,25 @@ class AIBot:
             response['reasoning'] = 'No reasoning provided.'
         return response
 
+    @staticmethod
     def build_prompt(asset_analysis_input):
+        # Build a robust prompt for the LLM using asset_analysis_input fields
+        symbol = getattr(asset_analysis_input, 'symbol', 'unknown')
+        asset_type = getattr(asset_analysis_input, 'asset_type', 'unknown')
+        market_data = getattr(asset_analysis_input, 'market_data', {})
+        technical_indicators = getattr(asset_analysis_input, 'technical_indicators', {})
+        news_sentiment = getattr(asset_analysis_input, 'news_sentiment', None)
+        reflection_insights = getattr(asset_analysis_input, 'reflection_insights', None)
+        historical_ai_context = getattr(asset_analysis_input, 'historical_ai_context', None)
         prompt = f"""
-        Asset: {asset_analysis_input.symbol}
-        Reflection Insights:
-        {asset_analysis_input.reflection_insights}
-
-        Historical AI Context:
-        {asset_analysis_input.historical_ai_context}
-
-        # ...other prompt sections...
+        Asset: {symbol}
+        Asset Type: {asset_type}
+        Market Data: {market_data}
+        Technical Indicators: {technical_indicators}
+        News Sentiment: {news_sentiment}
+        Reflection Insights: {reflection_insights}
+        Historical AI Context: {historical_ai_context}
+        # ...add more sections as needed...
         """
         return prompt
 

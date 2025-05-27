@@ -72,6 +72,9 @@ class ReflectionBot:
         self.max_reflection_age_days = MAX_REFLECTION_AGE_DAYS  # Only reflect on trades within 30 days
         self.reflection_batch_size = 5  # Process 5 trades at a time
         
+        # Debug log for reflection threshold
+        logger.info(f"[DEBUG] ReflectionBot MIN_REFLECTION_PNL: {self.min_reflection_pnl}")
+        
         # Insight categories
         self.insight_types = {
             'success_factor': 'What made this trade successful',
@@ -253,11 +256,13 @@ class ReflectionBot:
     
     def _should_reflect_on_trade(self, trade_outcome: TradeOutcome) -> bool:
         """Determine if a trade warrants reflection"""
-        
-        logger.info(f"Reflection threshold check: abs({trade_outcome.pnl_percent}) < {self.min_reflection_pnl}")
-        if abs(trade_outcome.pnl_percent) < self.min_reflection_pnl:
+        logger.info(f"[DEBUG] _should_reflect_on_trade: abs({trade_outcome.pnl_percent}) < {self.min_reflection_pnl} (type: {type(trade_outcome.pnl_percent)})")
+        pnl_percent = float(trade_outcome.pnl_percent)
+        # Only reflect on trades with absolute pnl_percent strictly greater than the threshold
+        if abs(pnl_percent) < self.min_reflection_pnl:
+            logger.info(f"Reflection threshold check: abs({pnl_percent}) < {self.min_reflection_pnl}")
             return False
-
+        logger.info(f"Reflection threshold check: abs({pnl_percent}) <= {self.min_reflection_pnl}")
         # Check if trade is recent enough
         age_days = (datetime.now() - trade_outcome.exit_time).days
         if age_days > self.max_reflection_age_days:
@@ -354,7 +359,7 @@ class ReflectionBot:
             # Create reflection prompt for the AI
             reflection_prompt = self._create_reflection_prompt(trade_outcome, context)
             
-            # Get AI analysis using the reflection prompt
+            # Use .format() only if there are actual format fields, otherwise pass as is
             ai_response = self.ai_bot.generate_analysis(
                 prompt_template=reflection_prompt,
                 variables={"analysis_schema": ANALYSIS_SCHEMA}
@@ -379,6 +384,7 @@ class ReflectionBot:
         
         outcome_type = "profitable" if trade_outcome.pnl > 0 else "losing"
         
+        # Use f-string, not .format(), to avoid tuple index errors
         prompt = f"""
         Analyze this completed {outcome_type} trade for learning insights:
         

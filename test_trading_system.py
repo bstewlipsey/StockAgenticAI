@@ -460,6 +460,61 @@ class TradingSystemTester:
             logger.error(f"NewsRetrieverBot integration test failed: {e}")
             return False
     
+    def test_asset_screener_crypto_logic(self):
+        """Test AssetScreenerBot's updated crypto logic."""
+        from bot_asset_screener import AssetScreenerBot
+        from bot_ai import AIBot
+        from bot_database import DatabaseBot
+        ai_bot = AIBot()
+        db_bot = DatabaseBot()
+        screener = AssetScreenerBot(ai_bot, db_bot)
+        results = screener.screen_assets()
+        # Check for at least one crypto asset in results
+        has_crypto = any(getattr(r, 'asset_type', None) == 'crypto' for r in results)
+        if not has_crypto:
+            raise AssertionError('No crypto asset found in AssetScreenerBot results')
+
+    def test_reflection_insights_integration(self):
+        """Test that ReflectionBot's insights are passed through the system loop."""
+        from bot_reflection import ReflectionBot, TradeOutcome
+        from bot_decision_maker import DecisionMakerBot
+        from data_structures import AssetAnalysisInput, ActionSignal
+        from datetime import datetime, timedelta
+        bot = ReflectionBot()
+        trade = TradeOutcome(
+            trade_id="T3",
+            symbol="BTC-USD",
+            asset_type="crypto",
+            action="buy",
+            entry_price=30000.0,
+            exit_price=33000.0,
+            quantity=0.1,
+            entry_time=datetime.now() - timedelta(hours=3),
+            exit_time=datetime.now(),
+            pnl=300.0,
+            pnl_percent=10.0,
+            duration_hours=3.0,
+            original_analysis=None,
+            market_conditions_entry=None,
+            market_conditions_exit=None
+        )
+        bot.analyze_and_store(trade)
+        decision_bot = DecisionMakerBot()
+        # Compose AssetAnalysisInput with minimal required fields
+        analysis_input = AssetAnalysisInput(
+            symbol="BTC-USD",
+            market_data={'action': 'buy', 'confidence': 0.9, 'reasoning': 'Test'},
+            technical_indicators={},
+            news_sentiment=None,
+            reflection_insights=bot.get_insights_for_symbol("BTC-USD", limit=1),
+            historical_ai_context=[],
+            asset_type="crypto"
+        )
+        decision = decision_bot.make_trading_decision(analysis_input, min_confidence=0.5)
+        # Accept any valid ActionSignal
+        if decision.signal not in [ActionSignal.BUY, ActionSignal.SELL, ActionSignal.HOLD]:
+            raise AssertionError('DecisionMakerBot did not return a valid ActionSignal')
+
     def print_summary(self):
         """Print test summary and results."""
         logger.info(f"\n{'='*60}")
@@ -507,6 +562,8 @@ def main():
         ("Backtester Bot", tester.test_backtester_bot),
         ("Orchestrator Bot Integration", tester.test_orchestrator_integration),
         ("News Retriever Bot Integration", tester.test_news_retriever_integration),
+        ("Asset Screener Crypto Logic", tester.test_asset_screener_crypto_logic),
+        ("Reflection Insights Integration", tester.test_reflection_insights_integration),
     ]
     
     for test_name, test_function in tests:

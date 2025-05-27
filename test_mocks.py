@@ -40,3 +40,23 @@ if __name__ == "__main__":
     print(crypto.get_current_price('BTC/USD'))
     news = MockNewsRetriever()
     print(news.fetch_news('BTC news'))
+
+import unittest
+
+class TestMockProviders(unittest.TestCase):
+    def test_stock_provider(self):
+        stock = MockStockDataProvider()
+        self.assertEqual(stock.get_historical_prices('AAPL', limit=5), [100, 101, 102, 103, 104])
+        self.assertEqual(stock.get_current_price('AAPL'), 123.45)
+    def test_crypto_provider(self):
+        crypto = MockCryptoDataProvider()
+        self.assertEqual(crypto.get_historical_prices('BTC/USD', limit=3), [200, 201, 202])
+        self.assertEqual(crypto.get_current_price('BTC/USD'), 23456.78)
+    def test_news_retriever(self):
+        news = MockNewsRetriever()
+        news_list = news.fetch_news('BTC news')
+        self.assertEqual(len(news_list), 2)
+        self.assertEqual(news.augment_context_and_llm('BTC news'), 'Test news summary.')
+
+if __name__ == "__main__":
+    unittest.main()

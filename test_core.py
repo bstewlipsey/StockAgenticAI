@@ -138,27 +138,31 @@ def test_ai_analysis():
     except Exception as e:
         logger.error(f"AI analysis: {e}"); return False
 
-def test_mock_stock_provider():
-    mock = MockStockDataProvider()
-    prices = mock.get_historical_prices('AAPL', limit=5)
-    assert prices == [100, 101, 102, 103, 104], f"Unexpected prices: {prices}"
-    assert mock.get_current_price('AAPL') == 123.45
-    print("MockStockDataProvider passed.")
+def test_test_mode_flag():
+    try:
+        from config import TEST_MODE_ENABLED
+        assert isinstance(TEST_MODE_ENABLED, bool)
+        print(f"TEST_MODE_ENABLED flag present: {TEST_MODE_ENABLED}")
+        return True
+    except Exception as e:
+        logger.error(f"TEST_MODE_ENABLED flag: {e}"); return False
 
-def test_mock_crypto_provider():
-    mock = MockCryptoDataProvider()
-    prices = mock.get_historical_prices('BTC/USD', limit=3)
-    assert prices == [200, 201, 202], f"Unexpected prices: {prices}"
-    assert mock.get_current_price('BTC/USD') == 23456.78
-    print("MockCryptoDataProvider passed.")
-
-def test_mock_news_retriever():
-    mock = MockNewsRetriever()
-    news = mock.fetch_news('BTC news')
-    assert len(news) == 2
-    summary = mock.augment_context_and_llm('BTC news')
-    assert summary == 'Test news summary.'
-    print("MockNewsRetriever passed.")
+def test_mock_providers():
+    try:
+        stock = MockStockDataProvider()
+        crypto = MockCryptoDataProvider()
+        news = MockNewsRetriever()
+        assert stock.get_historical_prices('AAPL', limit=5) == [100, 101, 102, 103, 104]
+        assert stock.get_current_price('AAPL') == 123.45
+        assert crypto.get_historical_prices('BTC/USD', limit=3) == [200, 201, 202]
+        assert crypto.get_current_price('BTC/USD') == 23456.78
+        news_list = news.fetch_news('BTC news')
+        assert len(news_list) == 2
+        assert news.augment_context_and_llm('BTC news') == 'Test news summary.'
+        print("Mock providers: PASS")
+        return True
+    except Exception as e:
+        logger.error(f"Mock providers: {e}"); return False
 
 def main():
     print("\n=== StockAgenticAI Core Smoke Test ===")
@@ -176,6 +180,8 @@ def main():
         ("TradeExecutor", test_executor),
         ("Agent", test_agent),
         ("AI Analysis", test_ai_analysis),
+        ("TEST_MODE Flag", test_test_mode_flag),
+        ("Mock Providers", test_mock_providers),
     ]
     passed = 0
     for name, fn in tests:
