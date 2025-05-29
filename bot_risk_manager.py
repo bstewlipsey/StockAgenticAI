@@ -179,8 +179,44 @@ class RiskBot:
         """Recommend position size based on risk constraints."""
         return self.manager.get_position_size(capital, price, risk_per_share, min_shares, allow_fractional)
 
+def selftest_risk_manager_bot():
+    """Standalone self-test for RiskManagerBot: tests risk metrics and edge cases."""
+    print(f"\n--- Running RiskManagerBot Self-Test ---")
+    try:
+        risk_bot = RiskBot(max_portfolio_risk=0.05, max_position_risk=0.02)
+        # Test 1: Normal position (profit)
+        pos1 = Position(symbol="AAPL", quantity=10, entry_price=100, current_price=110, asset_type="stock")
+        result1 = risk_bot.analyze_position(pos1)
+        assert abs(result1['unrealized_pnl'] - 100) < 1e-6, f"Expected PnL 100, got {result1['unrealized_pnl']}"
+        assert result1['risk_level'] == 'HIGH', f"Expected HIGH risk, got {result1['risk_level']}"
+        print("    -> Normal position (profit) logic passed.")
+        # Test 2: Normal position (loss)
+        pos2 = Position(symbol="TSLA", quantity=5, entry_price=200, current_price=190, asset_type="stock")
+        result2 = risk_bot.analyze_position(pos2)
+        assert abs(result2['unrealized_pnl'] + 50) < 1e-6, f"Expected PnL -50, got {result2['unrealized_pnl']}"
+        assert result2['risk_level'] == 'HIGH', f"Expected HIGH risk, got {result2['risk_level']}"
+        print("    -> Normal position (loss) logic passed.")
+        # Test 3: Edge case (zero quantity)
+        pos3 = Position(symbol="GOOGL", quantity=0, entry_price=100, current_price=120, asset_type="stock")
+        result3 = risk_bot.analyze_position(pos3)
+        assert result3['investment'] == 0, "Expected zero investment for zero quantity."
+        assert result3['risk_level'] == 'NONE', f"Expected NONE risk, got {result3['risk_level']}"
+        print("    -> Zero quantity edge case logic passed.")
+        # Test 4: Portfolio risk
+        portfolio = [pos1, pos2]
+        port_result = risk_bot.analyze_portfolio(portfolio)
+        expected_pnl = result1['unrealized_pnl'] + result2['unrealized_pnl']
+        assert abs(port_result['unrealized_pnl'] - expected_pnl) < 1e-6, "Portfolio PnL calculation error."
+        print("    -> Portfolio risk logic passed.")
+        print(f"--- RiskManagerBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- RiskManagerBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- RiskManagerBot Self-Test encountered an ERROR: {e} ---")
+
 # === Usage Example ===
 if __name__ == "__main__":
+    selftest_risk_manager_bot()
     # Example position
     pos = Position(symbol="AAPL", quantity=10, entry_price=150, current_price=145, asset_type="stock")
     risk_bot = RiskBot()

@@ -492,7 +492,7 @@ class ReflectionBot:
             if any(keyword in sentence.lower() for keyword in recommendation_keywords):
                 recommendations.append(sentence.strip())
         
-        return '. '.join(recommendations[:2])  # Take first 2 recommendations
+        return '.'.join(recommendations[:2])  # Take first 2 recommendations
     
     def _perform_systematic_analysis(self, trade_outcome: TradeOutcome) -> List[ReflectionInsight]:
         """Perform systematic analysis of trade metrics"""
@@ -657,7 +657,7 @@ class ReflectionBot:
             return []
     
     def _store_insights(self, insights: List[ReflectionInsight]):
-        """Store reflection insights in database"""
+        """Store reflection insights in database, including news context if available."""
         
         try:
             for insight in insights:
@@ -671,7 +671,8 @@ class ReflectionBot:
                     'actionable_recommendation': insight.actionable_recommendation,
                     'related_indicators': insight.related_indicators,
                     'market_context': insight.market_context,
-                    'timestamp': insight.timestamp or datetime.now()
+                    'timestamp': insight.timestamp or datetime.now(),
+                    'news_context': getattr(insight, 'news_context', None)  # Add news context if present
                 }
                 # Fill in required parameters with available data or placeholders
                 self.database_bot.store_reflection_insight(
@@ -682,15 +683,13 @@ class ReflectionBot:
                     exit_price=0.0,
                     pnl=0.0,
                     hold_duration_hours=0.0,
-                    market_conditions=insight_data.get('market_context') or "",
+                    market_conditions=insight_data.get('market_context') or insight_data.get('news_context') or "",
                     ai_reflection=insight_data.get('insight_text') or "",
                     key_insights=insight_data.get('actionable_recommendation') or "",
                     lessons_learned=insight_data.get('insight_text') or "",
                     confidence_accuracy=float(insight_data.get('confidence') or 0.0)
                  )
-            
-            logger.info(f"Stored {len(insights)} reflection insights in database")
-            
+            logger.info(f"Stored {len(insights)} reflection insights in database (news context included where available)")
         except Exception as e:
             logger.error(f"Error storing reflection insights: {e}")
     
@@ -712,3 +711,46 @@ class ReflectionBot:
             logger.error(f"Persistence validation failed: No insights found for {trade_outcome.symbol} after storing.")
 
         return persisted_insights if persisted_insights is not None else []
+
+def selftest_reflection_bot():
+    """Standalone self-test for ReflectionBot: tests insight generation from dummy trade."""
+    print(f"\n--- Running ReflectionBot Self-Test ---")
+    from datetime import datetime, timedelta
+    try:
+        class MockAIBot:
+            def __init__(self, *a, **k): pass
+            def call_llm(self, prompt): return "Mocked insight"
+        class MockDatabaseBot:
+            def __init__(self, *a, **k): self.insights = []
+            def get_reflection_insights(self, symbol, days=90):
+                return [{"trade_id": "T1", "symbol": symbol, "ai_reflection": "Mocked insight"}]
+            def store_reflection_insight(self, *a, **k): self.insights.append(a)
+        class MockReflectionBot(ReflectionBot):
+            def __init__(self):
+                self.ai_bot = MockAIBot()
+                self.database_bot = MockDatabaseBot()
+                self.min_reflection_pnl = 0
+                self.max_reflection_age_days = 30
+                self.reflection_batch_size = 5
+                self.insight_types = {'success_factor': 'What made this trade successful'}
+        bot = MockReflectionBot()
+        trade = TradeOutcome(
+            trade_id="T1", symbol="AAPL", asset_type="stock", action="buy",
+            entry_price=100.0, exit_price=110.0, quantity=10,
+            entry_time=datetime.now() - timedelta(hours=2), exit_time=datetime.now(),
+            pnl=100.0, pnl_percent=10.0, duration_hours=2.0
+        )
+        insights = bot.analyze_completed_trade(trade)
+        assert isinstance(insights, list), "analyze_completed_trade did not return a list."
+        print("    -> Insight generation logic passed.")
+        symbol_insights = bot.get_insights_for_symbol("AAPL", limit=1)
+        assert symbol_insights and symbol_insights[0].symbol == "AAPL", "get_insights_for_symbol failed."
+        print("    -> get_insights_for_symbol logic passed.")
+        print(f"--- ReflectionBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- ReflectionBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- ReflectionBot Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    selftest_reflection_bot()

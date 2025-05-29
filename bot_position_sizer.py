@@ -98,8 +98,43 @@ class PositionSizerBot:
             logger.info(f"[PositionSizerBot] Calculated position size for {asset_type or 'unknown'}: {shares}")
         return shares
 
+def selftest_position_sizer_bot():
+    """Standalone self-test for PositionSizerBot: tests sizing logic and edge cases."""
+    print(f"\n--- Running PositionSizerBot Self-Test ---")
+    try:
+        bot = PositionSizerBot(total_capital=10000, max_position_size=0.1)  # $10,000, max 10% per trade
+        # Test 1: Normal case
+        shares = bot.calculate_position_size(price=100, confidence=1.0)
+        expected = int(10000 * 0.1 / 100)
+        assert shares == expected, f"Expected {expected} shares, got {shares}"
+        print(f"    -> Normal sizing logic passed: {shares} shares.")
+        # Test 2: Low confidence
+        shares = bot.calculate_position_size(price=100, confidence=0.2)
+        expected = int(10000 * 0.1 * 0.2 / 100)
+        assert shares == expected, f"Expected {expected} shares, got {shares}"
+        print(f"    -> Low confidence sizing logic passed: {shares} shares.")
+        # Test 3: High price, insufficient capital
+        shares = bot.calculate_position_size(price=20000, confidence=1.0)
+        assert shares == 0, f"Expected 0 shares, got {shares}"
+        print(f"    -> High price/insufficient capital logic passed.")
+        # Test 4: allow_fractional=True
+        shares = bot.calculate_position_size(price=333, confidence=0.5, allow_fractional=True)
+        expected = (10000 * 0.1 * 0.5) / 333
+        assert abs(shares - expected) < 1e-6, f"Expected {expected} shares, got {shares}"
+        print(f"    -> Fractional share sizing logic passed: {shares:.4f} shares.")
+        # Test 5: Zero confidence
+        shares = bot.calculate_position_size(price=100, confidence=0.0)
+        assert shares == 0, f"Expected 0 shares for zero confidence, got {shares}"
+        print(f"    -> Zero confidence logic passed.")
+        print(f"--- PositionSizerBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- PositionSizerBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- PositionSizerBot Self-Test encountered an ERROR: {e} ---")
+
 # === Usage Example ===
 if __name__ == "__main__":
     sizer = PositionSizerBot(total_capital=10000, max_position_size=0.02)
     # Calculate position size for a $100 stock, 90% confidence, low volatility
     print("Shares to buy:", sizer.calculate_position_size(price=100, confidence=0.9, volatility=0.05, available_cash=500, min_shares=1, allow_fractional=False))
+    selftest_position_sizer_bot()

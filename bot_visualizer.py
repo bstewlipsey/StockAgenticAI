@@ -296,7 +296,7 @@ class VisualizerBot:
                 print(f"  - {lesson}")
 
     # Replace Unicode arrows and special characters in chart output
-    def safe_print_chart(chart):
+    def safe_print_chart(self, chart):
         ascii_chart = []
         for line in chart:
             # Replace common Unicode arrows with ASCII
@@ -378,3 +378,38 @@ if __name__ == "__main__":
     # tail_log('trading.log', alert_config)  # Commented out for test
     # Uncomment to test interactive log viewer
     # display_interactive_log_viewer(filter_keywords=['DECISION', 'TRADE_OUTCOME', 'ERROR'])
+
+def selftest_visualizer_bot():
+    """Standalone self-test for VisualizerBot: tests display methods with dummy data."""
+    print(f"\n--- Running VisualizerBot Self-Test ---")
+    import sys
+    import io
+    try:
+        bot = VisualizerBot(width=10, height=5)
+        # Test 1: Price chart
+        prices = [1, 2, 3, 4, 5, 4, 3, 2, 1, 2]
+        volumes = [10, 20, 30, 40, 30, 20, 10, 20, 30, 40]
+        chart = bot.create_price_chart(prices, volumes)
+        assert isinstance(chart, list) and len(chart) > 0, "create_price_chart did not return a chart."
+        print("    -> Price chart logic passed.")
+        # Test 2: Trend detection
+        trend = bot.detect_trend(prices)
+        assert trend in ['up', 'down', 'sideways'], f"Unexpected trend: {trend}"
+        print("    -> Trend detection logic passed.")
+        # Test 3: Display to console (capture stdout)
+        old_stdout = sys.stdout
+        sys.stdout = io.StringIO()
+        for line in chart:
+            print(line)
+        output = sys.stdout.getvalue()
+        sys.stdout = old_stdout
+        assert len(output) > 0, "No output printed to console."
+        print("    -> Console output logic passed.")
+        print(f"--- VisualizerBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- VisualizerBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- VisualizerBot Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    selftest_visualizer_bot()

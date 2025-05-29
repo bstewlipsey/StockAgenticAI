@@ -102,8 +102,7 @@ class TradingSystemTester:
         
         required_vars = [
             'ALPACA_API_KEY',
-            'ALPACA_SECRET_KEY', 
-            'GEMINI_API_KEY'
+            'ALPACA_SECRET_KEY'
         ]
         
         missing_vars = []
@@ -124,8 +123,8 @@ class TradingSystemTester:
         
         try:
             from config_system import (
-                ALPACA_API_KEY, ALPACA_SECRET_KEY, GEMINI_API_KEY,
-                GEMINI_MODEL, PAPER_TRADING, TRADING_CYCLE_INTERVAL
+                GEMINI_MODEL, PAPER_TRADING, TRADING_CYCLE_INTERVAL,
+                ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, RATE_LIMIT_DELAY_SECONDS
             )
             logger.info("Config imported successfully")
             logger.info(f"Using Gemini model: {GEMINI_MODEL}")
@@ -252,16 +251,16 @@ class TradingSystemTester:
         
         try:
             import google.generativeai as genai
-            from config_system import GEMINI_API_KEY, GEMINI_MODEL
-            
-            genai.configure(api_key=GEMINI_API_KEY)
+            from bot_gemini_key_manager import GeminiKeyManagerBot
+            from config_system import GEMINI_MODEL
+            gemini_key_manager = GeminiKeyManagerBot()
+            key = gemini_key_manager.get_available_key()
+            assert key, "No Gemini API key available from GeminiKeyManagerBot."
+            genai.configure(api_key=key)
             model = genai.GenerativeModel(GEMINI_MODEL)
-            
-            # Test simple generation
             response = model.generate_content(
                 "Respond with exactly: 'Gemini AI test successful'"
             )
-            
             if "successful" in response.text.lower():
                 logger.info("Gemini AI response received successfully")
                 return True

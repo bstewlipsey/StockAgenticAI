@@ -4,7 +4,10 @@ numpy==2.2.6
 colorama==0.4.6
 ta==0.11.0
 ccxt==4.2.17
-alpaca-trade-api==3.0.0
+alpaca-trade-api==3.0.0  # Legacy Alpaca API (used in bot_stock.py)
+alpaca-py==0.40.1         # New Alpaca SDK (used for historical data and crypto)
 google-generativeai==0.3.2
 aiohttp==3.8.1
 yfinance==0.2.40
+networkx==3.3
+# Note: Both alpaca-trade-api and alpaca-py are required for full compatibility with all code paths.

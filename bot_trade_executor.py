@@ -39,20 +39,20 @@ class TradeExecutorBot:
         
         Setup Process:
         1. Creates REST API connection to Alpaca using provided credentials
-        2. Uses base URL from config (automatically set based on paper_trading setting)
+        2. Uses base URL from config_system.py (automatically set based on paper_trading setting)
         3. Sets API version to 'v2' for latest Alpaca API features
         4. Initializes logging for trade execution tracking
         
         Safety Note:
         - Paper trading is enabled by default to prevent accidental real money trades
-        - The base URL is automatically configured in config.py based on trading mode
+        - The base URL is automatically configured in config_system.py based on trading mode
         - All API calls will be logged for audit purposes
         """        # Establish connection to Alpaca's trading API
-        # ALPACA_BASE_URL is automatically set in config.py based on paper_trading setting
+        # ALPACA_BASE_URL is automatically set in config_system.py based on paper_trading setting
         self.api = tradeapi.REST(
             api_key,                    # Your unique API key for authentication
             api_secret,                 # Your secret key for secure access
-            base_url=URL(ALPACA_BASE_URL),   # Trading endpoint (paper or live) from config
+            base_url=URL(ALPACA_BASE_URL),   # Trading endpoint (paper or live) from config_system.py
             api_version='v2'            # Use latest API version for full features
         )
         
@@ -146,17 +146,18 @@ class TradeExecutorBot:
                 
             except Exception as e:
                 self.logger.error(f"[TradeExecutorBot] Trade execution failed for {symbol} ({asset_type}): {e}")
+                self.logger.error("Returning False, str(e) due to trade execution failure.")
                 return False, str(e)
-                
         except ValueError as ve:
             # Handle validation errors (missing parameters, invalid values)
             self.logger.error(f"Order validation failed: {ve}")
+            self.logger.error("Returning False, None due to order validation failure.")
             return False, None
-            
         except Exception as e:
             # Handle any unexpected errors to prevent system crashes
             self.logger.error(f"Unexpected error executing trade for {symbol}: {str(e)}")
             self.logger.debug(f"Error details: {e}", exc_info=True)
+            self.logger.error("Returning False, None due to unexpected error in execute_trade.")
             return False, None    
     
     def get_account(self):
@@ -265,16 +266,156 @@ class TradeExecutorBot:
             self.logger.error(f"Error closing position for {symbol}: {e}")
             return {"error": str(e)}
 
+    def fetch_order_history(self, status='all', limit=50):
+        """
+        Fetch recent order history from Alpaca API.
+        Args:
+            status (str): Filter orders by status ('all', 'open', 'closed', etc.)
+            limit (int): Number of orders to fetch
+        Returns:
+            List[dict]: List of order dicts
+        """
+        try:
+            orders = self.api.list_orders(status=status, limit=limit)
+            order_list = []
+            for o in orders:
+                order_list.append({
+                    'id': getattr(o, 'id', None),
+                    'symbol': getattr(o, 'symbol', None),
+                    'side': getattr(o, 'side', None),
+                    'qty': float(getattr(o, 'qty', 0)),
+                    'filled_qty': float(getattr(o, 'filled_qty', 0)),
+                    'status': getattr(o, 'status', None),
+                    'submitted_at': getattr(o, 'submitted_at', None),
+                    'filled_at': getattr(o, 'filled_at', None),
+                    'type': getattr(o, 'type', None),
+                    'asset_class': getattr(o, 'asset_class', None)
+                })
+            return order_list
+        except Exception as e:
+            self.logger.error(f"Error fetching Alpaca order history: {e}")
+            return []
+
+    def cross_check_order_history(self, db_bot=None, days=7, log_only=True):
+        """
+        Cross-check Alpaca order history with internal trade records.
+        Args:
+            db_bot (DatabaseBot): Optional, for retrieving internal trade outcomes
+            days (int): Lookback period for trade outcomes
+            log_only (bool): If True, only log discrepancies; else, return them
+        Returns:
+            List[dict]: List of discrepancies (if log_only is False)
+        """
+        if db_bot is None:
+            from bot_database import DatabaseBot
+            db_bot = DatabaseBot()
+        alpaca_orders = self.fetch_order_history(status='all', limit=100)
+        internal_trades = db_bot.get_trade_outcomes(days=days)
+        discrepancies = []
+        # Build sets for quick lookup
+        alpaca_set = set((o['symbol'], o['side'], o['qty'], o['submitted_at']) for o in alpaca_orders)
+        internal_set = set((t['symbol'], t['trade_type'], t['quantity'], t['timestamp']) for t in internal_trades)
+        # Find missing in Alpaca
+        for t in internal_trades:
+            key = (t['symbol'], t['trade_type'], t['quantity'], t['timestamp'])
+            if key not in alpaca_set:
+                msg = f"[ORDER_XCHECK] Internal trade not found in Alpaca: {t}"
+                self.logger.warning(msg)
+                discrepancies.append({'type': 'missing_in_alpaca', 'trade': t})
+        # Find extra in Alpaca
+        for o in alpaca_orders:
+            key = (o['symbol'], o['side'], o['qty'], o['submitted_at'])
+            if key not in internal_set:
+                msg = f"[ORDER_XCHECK] Alpaca order not found in internal records: {o}"
+                self.logger.warning(msg)
+                discrepancies.append({'type': 'extra_in_alpaca', 'order': o})
+        if not discrepancies:
+            self.logger.info("[ORDER_XCHECK] No discrepancies found between Alpaca and internal records.")
+        if log_only:
+            return None
+        return discrepancies
+
+    @staticmethod
+    def selftest():
+        print(f"\n--- Running TradeExecutorBot Self-Test ---")
+        class MockAPI:
+            def submit_order(self, **kwargs):
+                if kwargs.get('symbol') == 'FAIL':
+                    raise Exception('Mocked order failure')
+                return {'id': 'mock_order_id', 'symbol': kwargs.get('symbol'), 'qty': kwargs.get('qty'), 'side': kwargs.get('side')}
+            def get_account(self):
+                return {'id': 'mock_account', 'cash': 10000, 'buying_power': 20000, 'status': 'ACTIVE'}
+            def list_positions(self):
+                return []
+            def close_position(self, symbol):
+                return {'closed': True, 'symbol': symbol}
+            def list_orders(self, status='all', limit=50):
+                class Order:
+                    def __init__(self, symbol, side, qty, submitted_at):
+                        self.id = f"mock_{symbol}_{side}"
+                        self.symbol = symbol
+                        self.side = side
+                        self.qty = qty
+                        self.filled_qty = qty
+                        self.status = 'filled'
+                        self.submitted_at = submitted_at
+                        self.filled_at = submitted_at
+                        self.type = 'market'
+                        self.asset_class = 'us_equity'
+                # Return two orders, one matching, one extra
+                return [Order('AAPL', 'buy', 1, '2023-01-01T00:00:00Z'), Order('TSLA', 'sell', 2, '2023-01-02T00:00:00Z')]
+        class MockDB:
+            def get_trade_outcomes(self, days=7):
+                # One matching, one missing in Alpaca
+                return [
+                    {'symbol': 'AAPL', 'trade_type': 'buy', 'quantity': 1, 'timestamp': '2023-01-01T00:00:00Z'},
+                    {'symbol': 'GOOG', 'trade_type': 'buy', 'quantity': 3, 'timestamp': '2023-01-03T00:00:00Z'}
+                ]
+        class MockTradeExecutorBot(TradeExecutorBot):
+            def __init__(self):
+                self.api = MockAPI()
+                self.logger = logging.getLogger(__name__)
+        try:
+            bot = MockTradeExecutorBot()
+            # Test 1: Successful trade
+            success, resp = bot.execute_trade('AAPL', 'buy', 1, 1.0)
+            assert success and resp['symbol'] == 'AAPL', f"Expected success for AAPL, got {success}, {resp}"
+            print("    -> Successful trade logic passed.")  # CLI/test output
+            # Test 2: Failed trade
+            success, resp = bot.execute_trade('FAIL', 'buy', 1, 1.0)
+            assert not success, "Expected failure for symbol 'FAIL'"
+            print("    -> Trade failure logic passed.")  # CLI/test output
+            # Test 3: Account info
+            acct = bot.get_account()
+            assert isinstance(acct, dict) and 'cash' in acct and 'buying_power' in acct, "Account info missing expected keys."
+            print("    -> Account info logic passed.")  # CLI/test output
+            # Test order history fetch
+            orders = bot.fetch_order_history()
+            assert isinstance(orders, list) and len(orders) == 2, "Order history fetch failed"
+            print("    -> Order history fetch logic passed.")
+            # Test cross-check logic
+            discrepancies = bot.cross_check_order_history(db_bot=MockDB(), log_only=False)
+            if discrepancies is None:
+                discrepancies = []
+            assert isinstance(discrepancies, list) and len(discrepancies) == 2, f"Expected 2 discrepancies, got {len(discrepancies)}"
+            print("    -> Order history cross-check logic passed.")
+            print(f"--- TradeExecutorBot Self-Test PASSED ---")
+        except AssertionError as e:
+            print(f"--- TradeExecutorBot Self-Test FAILED: {e} ---")
+        except Exception as e:
+            print(f"--- TradeExecutorBot Self-Test encountered an ERROR: {e} ---")
+
 # === Usage Example ===
 if __name__ == "__main__":
+    TradeExecutorBot.selftest()
     executor = TradeExecutorBot(ALPACA_API_KEY, ALPACA_SECRET_KEY, paper_trading=True)
     # Example: Place a test buy order for AAPL
     success, response = executor.execute_trade(
         symbol="AAPL", side="buy", quantity=1, confidence=1.0
     )
-    print("AAPL order success:", success, "response:", response)
+    print("AAPL order success:", success, "response:", response)  # CLI/test output
     # Example: List open positions
-    print("Open positions:", executor.get_open_positions())
+    print("Open positions:", executor.get_open_positions())  # CLI/test output
 
 # === OUTPUT EXPLANATION ===
 # Each order attempt prints a clear, labeled result:
@@ -284,3 +425,4 @@ if __name__ == "__main__":
 # Crypto orders use 'gtc' (good till canceled) as required by Alpaca, stocks use 'day'.
 # This makes it easy to see which trades succeeded or failed, and why, for each asset.
 # You can confirm all successful orders in your Alpaca dashboard.
+# (No print statements found in main production logic. If any are added, ensure they are for CLI/test output only and all critical errors are logged.)

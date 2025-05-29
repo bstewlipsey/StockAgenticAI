@@ -1,0 +1,279 @@
+# Agentic Stock AI - Bot Function Reference
+
+This document lists all major functions (with arguments and return types) for the main bots in the Agentic Stock AI system. For full details, see each bot's source file.
+
+---
+
+## PortfolioBot
+- __init__(self, initial_capital: float = TOTAL_CAPITAL) -> None
+  - Arguments: initial_capital (float, optional)
+  - Returns: None
+- add_or_update_position(self, symbol: str, asset_type: str, quantity: float, entry_price: float) -> None
+  - Arguments: symbol (str), asset_type (str), quantity (float), entry_price (float)
+  - Returns: None
+- close_position(self, symbol: str, exit_price: float) -> None
+  - Arguments: symbol (str), exit_price (float)
+  - Returns: None
+- calculate_metrics(self) -> dict
+  - Returns: dict with keys: total_return, win_rate, avg_profit, avg_loss, largest_gain, largest_loss
+- get_portfolio_metrics(self) -> dict
+  - Returns: dict (see above)
+- get_open_positions(self) -> dict[str, Trade]
+  - Returns: dict[str, Trade]
+- get_trade_history(self) -> list[Trade]
+  - Returns: list[Trade]
+- print_portfolio_summary(self) -> None
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  - Returns: bool (True if self-test passes)
+
+---
+
+## StockBot
+- __init__(self) -> None
+- get_current_price(self, symbol: str) -> float | None
+  - Arguments: symbol (str)
+  - Returns: float or None
+- analyze_stock(self, symbol: str, prompt_note: str = None) -> dict
+  - Arguments: symbol (str), prompt_note (str, optional)
+  - Returns: dict (AI analysis or error)
+- print_performance_summary(self, symbol: str, asset_type: str, timeframe, days_back: int = 50) -> None
+  - Arguments: symbol (str), asset_type (str), timeframe, days_back (int, default 50)
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## CryptoBot
+- __init__(self, exchange = None) -> None
+- get_crypto_data(self, symbol: str, max_retries: int = 5) -> dict
+  - Arguments: symbol (str), max_retries (int, default 5)
+  - Returns: dict (crypto data)
+- analyze_crypto(self, symbol: str, prompt_note: str = None) -> dict
+  - Arguments: symbol (str), prompt_note (str, optional)
+  - Returns: dict (AI analysis or error)
+- monitor_positions(self) -> None
+  - Returns: None
+- print_performance_summary(self, symbol: str, asset_type: str, timeframe = None) -> None
+  - Arguments: symbol (str), asset_type (str), timeframe (optional)
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## TradeExecutorBot
+- __init__(self, api_key: str, api_secret: str, paper_trading: bool = True) -> None
+- execute_trade(self, symbol: str, side: str, quantity: float, confidence: float) -> tuple[bool, dict | str]
+  - Arguments: symbol (str), side (str), quantity (float), confidence (float)
+  - Returns: (bool, dict or str)
+- get_account(self) -> dict
+  - Returns: dict (account info)
+- get_open_positions(self, asset_type: str = None) -> list | dict
+  - Arguments: asset_type (str, optional)
+  - Returns: list or dict (positions)
+- close_position(self, symbol: str, quantity: float = None, asset_type: str = None) -> None
+  - Arguments: symbol (str), quantity (float, optional), asset_type (str, optional)
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## DecisionMakerBot
+- __init__(self) -> None
+- make_trading_decision(self, analysis_input: AssetAnalysisInput, min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> TradingDecision
+  - Arguments: analysis_input (AssetAnalysisInput), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
+  - Returns: TradingDecision
+- batch_make_decisions(self, analyses: list[AssetAnalysisInput], min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> list[TradingDecision]
+  - Arguments: analyses (list[AssetAnalysisInput]), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
+  - Returns: list[TradingDecision]
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## ReflectionBot
+- __init__(self, database_bot: 'DatabaseBot', ai_bot: 'AIBot') -> None
+  # ai_bot is used for generating insights, database_bot for fetching/storing.
+- analyze_completed_trade(self, trade_outcome: TradeOutcome) -> list[ReflectionInsight]
+  - Arguments: trade_outcome (TradeOutcome)
+  - Returns: list[ReflectionInsight]
+- batch_analyze_recent_trades(self, days_back: int = 7) -> list[ReflectionInsight]
+  - Arguments: days_back (int, default 7)
+  - Returns: list[ReflectionInsight]
+- get_insights_for_symbol(self, symbol: str, limit: int = 10) -> list[ReflectionInsight]
+  - Arguments: symbol (str), limit (int, default 10)
+  - Returns: list[ReflectionInsight]
+- generate_enhanced_prompt_note(self, symbol: str) -> str
+  - Arguments: symbol (str)
+  - Returns: str
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## AssetScreenerBot
+- __init__(self, ai_bot, database_bot) -> None
+- screen_assets(self, market_conditions: dict = None) -> list[AssetScreeningResult]
+  - Arguments: market_conditions (dict, optional)
+  - Returns: list[AssetScreeningResult]
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## BacktesterBot
+- __init__(self) -> None
+- run_backtest(self, config: BacktestConfig) -> BacktestResult
+  - Arguments: config (BacktestConfig)
+  - Returns: BacktestResult
+- run_parameter_sweep(self, base_config: BacktestConfig, parameter_ranges: dict) -> list[BacktestResult]
+  - Arguments: base_config (BacktestConfig), parameter_ranges (dict)
+  - Returns: list[BacktestResult]
+- validate_strategy_robustness(self, config: BacktestConfig, validation_periods: int = 5) -> dict
+  - Arguments: config (BacktestConfig), validation_periods (int, default 5)
+  - Returns: dict
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## NewsRetrieverBot
+- __init__(self) -> None
+- fetch_news(self, query: str, max_results: int = 10) -> list[NewsArticle]
+  - Arguments: query (str), max_results (int, default 10)
+  - Returns: list[NewsArticle]
+- preprocess_and_chunk(self, articles: list[NewsArticle], chunk_size: int = 512) -> list[NewsArticle]
+  - Arguments: articles (list[NewsArticle]), chunk_size (int, default 512)
+  - Returns: list[NewsArticle]
+- generate_embeddings(self, articles: list[NewsArticle]) -> list[list[float]]
+  - Arguments: articles (list[NewsArticle])
+  - Returns: list[list[float]]
+- similarity_search(self, query: str, top_k: int = 3) -> list[NewsArticle]
+  - Arguments: query (str), top_k (int, default 3)
+  - Returns: list[NewsArticle]
+- augment_context_and_llm(self, query: str) -> str
+  - Arguments: query (str)
+  - Returns: str
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## VisualizerBot
+- __init__(self, width: int = 50, height: int = 10) -> None
+  - Arguments: width (int, default 50), height (int, default 10)
+  - Returns: None
+- create_price_chart(self, prices: list[float], volumes: list[float] = None) -> list[str]
+  - Arguments: prices (list[float]), volumes (list[float], optional)
+  - Returns: list[str] (ASCII/Unicode chart lines)
+- detect_trend(self, prices: list[float], window: int = 5) -> str
+  - Arguments: prices (list[float]), window (int, default 5)
+  - Returns: str ('up', 'down', or 'sideways')
+- calculate_fibonacci_levels(self, prices: list[float]) -> dict
+  - Arguments: prices (list[float])
+  - Returns: dict (level: price)
+- detect_patterns(self, prices: list[float], window: int = 20) -> list[tuple]
+  - Arguments: prices (list[float]), window (int, default 20)
+  - Returns: list[tuple] (pattern, description)
+- visualize_signals(self, prices: list[float], signals, indicators: dict, volumes: list[float] = None) -> tuple[list[str], list[str]]
+  - Arguments: prices (list[float]), signals, indicators (dict), volumes (list[float], optional)
+  - Returns: tuple (list[str], list[str])
+- display_reflection_insights(self, symbol: str = None, limit: int = 10) -> None
+  - Arguments: symbol (str, optional), limit (int, default 10)
+  - Returns: None (prints to console)
+- display_performance_trends(self, symbol: str = None, days: int = 30) -> None
+  - Arguments: symbol (str, optional), days (int, default 30)
+  - Returns: None (prints to console)
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## IndicatorBot
+- __init__(self, prices: list[float], window: int = SMA_WINDOW) -> None
+  - Arguments: prices (list[float]), window (int, default SMA_WINDOW)
+  - Returns: None
+- calculate_indicators(self) -> dict
+  - Returns: dict (keys: rsi, macd, macd_signal, macd_histogram, sma_20, ema_20, bb_upper, bb_lower, obv, adi, vwap, current_price, has_signals)
+- get_signals(self) -> tuple[list[tuple], dict]
+  - Returns: tuple (list[tuple], dict) (signals, indicators)
+- selftest() [@staticmethod] -> bool
+  - Returns: bool
+- test_signals() [@staticmethod] -> bool
+  - Returns: bool
+
+---
+
+## RiskManagerBot
+- __init__(self, portfolio_bot: 'PortfolioBot', max_portfolio_risk: float = MAX_PORTFOLIO_RISK, max_position_risk: float = MAX_POSITION_RISK) -> None
+  # portfolio_bot needed to get current positions for risk analysis
+  - Arguments: max_portfolio_risk (float, default MAX_PORTFOLIO_RISK), max_position_risk (float, default MAX_POSITION_RISK)
+  - Returns: None
+- analyze_position(self, position: Position) -> dict
+  - Arguments: position (Position)
+  - Returns: dict (risk metrics)
+- evaluate_portfolio_risk(self) -> dict
+  # Renamed from analyze_portfolio for clarity, uses internal portfolio_bot
+  - Returns: dict (portfolio risk metrics)
+
+---
+
+## PositionSizerBot
+- __init__(self, portfolio_bot: 'PortfolioBot', risk_manager_bot: 'RiskManagerBot') -> None
+  # Needs portfolio_bot for available capital, risk_manager_bot for risk parameters
+- calculate_position_size(self, symbol: str, price: float, decision: 'TradingDecision', risk_per_trade_percent: float) -> float
+  - Arguments: symbol (str), price (float), decision (TradingDecision), risk_per_trade_percent (float)
+  - Returns: float (calculated position size in shares/units)
+
+---
+
+## DatabaseBot
+- __init__(self, db_path: str = "trading_data.db") -> None
+- save_trade_outcome(self, trade_outcome: 'TradeOutcome') -> None
+- get_trade_history(self, symbol: str = None, limit: int = None) -> list['TradeOutcome']
+- save_reflection_insight(self, insight: 'ReflectionInsight') -> None
+- get_reflection_insights(self, symbol: str = None, limit: int = None) -> list['ReflectionInsight']
+
+---
+
+## GeminiKeyManagerBot
+- __init__(self, daily_quota: int = 500) -> None
+  - Arguments: daily_quota (int, default 500)
+  - Returns: None
+- get_available_key(self) -> str | None
+  - Returns: str (API key) or None if all keys are exhausted for the current time window
+- record_usage(self, key: str) -> None
+  - Arguments: key (str)
+  - Returns: None
+- get_usage_report(self) -> dict
+  - Returns: dict (key: usage stats)
+- reset_usage(self) -> None
+  - Returns: None
+
+---
+
+## KnowledgeGraphBot
+- __init__(self) -> None
+  - Returns: None
+- add_trading_decision(self, decision_id, symbol, action, confidence, timestamp=None, **kwargs) -> None
+  - Arguments: decision_id, symbol, action, confidence, timestamp (optional), **kwargs
+  - Returns: None
+- add_trade_outcome(self, outcome_id, decision_id, result, pnl, timestamp=None, **kwargs) -> None
+  - Arguments: outcome_id, decision_id, result, pnl, timestamp (optional), **kwargs
+  - Returns: None
+- get_decision_outcomes(self, decision_id) -> list[dict]
+  - Arguments: decision_id
+  - Returns: list of outcome node attribute dicts for the given decision
+- get_all_decisions(self) -> list[str]
+  - Returns: list of decision node names
+- get_all_outcomes(self) -> list[str]
+  - Returns: list of outcome node names
+- selftest(self) -> None
+  - Returns: None (prints test results)
+
+---
+
+For more details, see each bot's Python file in the codebase.

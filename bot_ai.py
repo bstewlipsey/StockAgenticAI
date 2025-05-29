@@ -11,7 +11,9 @@ import re
 import json
 import google.generativeai as genai
 from google.generativeai.types import GenerationConfig
-from config_system import GEMINI_API_KEY, GEMINI_MODEL, TEMPERATURE, MAX_TOKENS, ANALYSIS_SCHEMA, CRYPTO_ANALYSIS_TEMPLATE, STOCK_ANALYSIS_TEMPLATE
+from config_system import GEMINI_MODEL, TEMPERATURE, MAX_TOKENS, ANALYSIS_SCHEMA, CRYPTO_ANALYSIS_TEMPLATE, STOCK_ANALYSIS_TEMPLATE
+from bot_gemini_key_manager import GeminiKeyManagerBot
+import logging
 
 # === Standalone AI Analysis Function ===
 def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=None):
@@ -26,7 +28,13 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
         str: The LLM's response text, or an empty string on failure.
     """
     model = model_name or GEMINI_MODEL
-    key = api_key or GEMINI_API_KEY
+    # Use GeminiKeyManagerBot to get a quota-safe key
+    key = api_key
+    gemini_key_manager = GeminiKeyManagerBot()  # FIX: instantiate the key manager
+    if key is None:
+        key = gemini_key_manager.get_available_key()
+        if not key:
+            raise RuntimeError("All Gemini API keys exhausted for now. Wait before retrying.")
     try:
         genai.configure(api_key=key)
         llm = genai.GenerativeModel(model)
@@ -35,7 +43,6 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
             prompt = prompt_template
         elif isinstance(variables, dict):
             try:
-                # Convert template to f-string style using locals()
                 prompt = prompt_template
                 for k, v in variables.items():
                     prompt = prompt.replace(f'{{{k}}}', str(v))
@@ -45,10 +52,24 @@ def generate_ai_analysis(prompt_template, variables, model_name=None, api_key=No
             prompt = prompt_template
         else:
             prompt = prompt_template
+        logger = logging.getLogger(__name__)
+        # Only log full prompt at DEBUG level or if LOG_FULL_PROMPT is set
+        log_full_prompt = getattr(llm, 'LOG_FULL_PROMPT', False)
+        if logger.isEnabledFor(logging.DEBUG) or log_full_prompt:
+            logger.debug(f"[LLM_PROMPT] {prompt}")
         response = llm.generate_content(prompt)
+        logger.info(f"[LLM_RAW_RESPONSE] {response.text}")
+        # Try to parse as JSON and log the attempt
+        try:
+            parsed = json.loads(response.text)
+            logger.info(f"[LLM_JSON_PARSE_SUCCESS] {parsed}")
+        except Exception as e:
+            logger.warning(f"[LLM_JSON_PARSE_FAIL] Could not parse: {response.text}")
         return response.text.strip()
-    except Exception:
-        return ""
+    except Exception as e:
+        logger = logging.getLogger(__name__)
+        logger.error(f"[AI_ANALYSIS_ERROR] Failed to generate AI analysis: {e}")
+        raise RuntimeError(f"generate_ai_analysis failed: {e}")
 
 # === AIBot Class ===
 class AIBot:
@@ -61,7 +82,11 @@ class AIBot:
     """
     def __init__(self, model_name=None, api_key=None):
         self.model_name = model_name or GEMINI_MODEL
-        self.api_key = api_key or GEMINI_API_KEY
+        # Always use GeminiKeyManagerBot for key management
+        self.gemini_key_manager = GeminiKeyManagerBot()
+        self.api_key = api_key or self.gemini_key_manager.get_available_key()
+        if not self.api_key:
+            raise RuntimeError("All Gemini API keys exhausted for now. Wait before retrying.")
         genai.configure(api_key=self.api_key)
         self.llm = genai.GenerativeModel(self.model_name)
         # Add prompt_templates mapping for correct operation
@@ -93,6 +118,22 @@ class AIBot:
         # Fallback for other types
         return prompt_template
 
+    def call_llm(self, prompt: str) -> str:
+        logger = logging.getLogger(__name__)
+        # Only log full prompt at DEBUG level or if LOG_FULL_PROMPT is set
+        log_full_prompt = getattr(self, 'LOG_FULL_PROMPT', False)
+        if logger.isEnabledFor(logging.DEBUG) or log_full_prompt:
+            logger.debug(f"[LLM_PROMPT] {prompt}")
+        response = self.llm.generate_content(prompt)
+        logger.info(f"[LLM_RAW_RESPONSE] {response.text}")
+        # Try to parse as JSON and log the attempt
+        try:
+            parsed = json.loads(response.text)
+            logger.info(f"[LLM_JSON_PARSE_SUCCESS] {parsed}")
+        except Exception as e:
+            logger.warning(f"[LLM_JSON_PARSE_FAIL] Could not parse: {response.text}")
+        return response.text.strip()
+
     @staticmethod
     def clean_json_response(text):
         """
@@ -103,9 +144,13 @@ class AIBot:
         text = text.replace("'", '"')
         text = re.sub(r',\s*}', '}', text)
         text = re.sub(r',\s*]', ']', text)
+        logger = logging.getLogger(__name__)
         try:
-            return json.loads(text)
-        except Exception:
+            result = json.loads(text)
+            logger.debug(f"[LLM_JSON_PARSE_SUCCESS] {result}")
+            return result
+        except Exception as e:
+            logger.warning(f"[LLM_JSON_PARSE_FAIL] Could not parse: {text}")
             return None
 
     @staticmethod
@@ -156,7 +201,6 @@ class AIBot:
     @staticmethod
     def parse_ai_analysis_response(response):
         # Ensure the response is a dict and contains 'action'
-        import logging
         logger = logging.getLogger(__name__)
         if not isinstance(response, dict):
             logger.warning("AI analysis response is not a dict. Returning default hold action.")
@@ -191,5 +235,35 @@ class AIBot:
         # ...add more sections as needed...
         """
         return prompt
+
+    def selftest(self):
+        print(f"\n--- Running {self.__class__.__name__} Self-Test ---")
+        try:
+            print("  - Testing LLM call functionality...")
+            test_prompt = "Briefly explain what a stock market is."
+            response = self.call_llm(test_prompt)
+            assert isinstance(response, str) and len(response) > 10, \
+                f"LLM call did not return a valid string response. Got: '{response}'"
+            print(f"    -> LLM call successful. Response snippet: '{response[:50]}...'")
+            print(f"--- {self.__class__.__name__} Self-Test PASSED ---")
+        except AssertionError as e:
+            print(f"--- {self.__class__.__name__} Self-Test FAILED: {e} ---")
+        except Exception as e:
+            print(f"--- {self.__class__.__name__} Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    print("\n--- Running AIBot Real Gemini API Test ---")
+    try:
+        test_bot = AIBot()
+        test_prompt = "Say 'Gemini API test successful'"
+        print("  - Sending real prompt to Gemini API...")
+        response = test_bot.call_llm(test_prompt)
+        print(f"  - Gemini API response: {response}")
+        assert "gemini api test successful" in response.lower(), f"Gemini API did not return expected confirmation. Got: '{response}'"
+        print("--- AIBot Real Gemini API Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- AIBot Real Gemini API Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- AIBot Real Gemini API Test encountered an ERROR: {e} ---")
 
 # === End of bot_ai.py ===

@@ -856,5 +856,5 @@ class BacktesterBot:
     
     def _analyze_robustness(self, results: List[BacktestResult]) -> Dict[str, Any]:
         """Analyze strategy robustness across different periods"""
-        # Implementation for robustness analysis
-        return {'consistency_score': 0, 'performance_variance': 0}
+        # TODO: Implement real robustness analysis logic.
+        raise NotImplementedError("_analyze_robustness must be implemented with real logic.")

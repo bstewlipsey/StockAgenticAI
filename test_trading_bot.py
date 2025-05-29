@@ -25,7 +25,7 @@ from datetime import datetime
 import google.generativeai as genai
 import alpaca_trade_api as tradeapi
 import ccxt
-from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
+from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_MODEL
 from config_trading import TRADING_ASSETS
 from bot_database import DatabaseBot
 from bot_indicators import IndicatorBot
@@ -36,10 +36,11 @@ from bot_position_sizer import PositionSizerBot
 import unittest
 from datetime import datetime, timedelta
 from bot_backtester import BacktesterBot, BacktestConfig
+from bot_gemini_key_manager import GeminiKeyManagerBot
 
 # --- API Key and Config Imports (moved to top for clarity) ---
 try:
-    from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_API_KEY, GEMINI_MODEL
+    from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, GEMINI_MODEL
 except Exception as e:
     print(f"Config import failed: {e}")
     sys.exit(1)
@@ -116,7 +117,10 @@ class TradingBotTester:
         """Test all API connections."""
         # Test Gemini API
         try:
-            genai.configure(api_key=GEMINI_API_KEY)
+            gemini_key_manager = GeminiKeyManagerBot()
+            key = gemini_key_manager.get_available_key()
+            assert key, "No Gemini API key available from GeminiKeyManagerBot."
+            genai.configure(api_key=key)
             model = genai.GenerativeModel(GEMINI_MODEL)
             response = model.generate_content("Hello, respond with 'API Working'")
             if "API Working" in response.text or "working" in response.text.lower():

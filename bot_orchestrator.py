@@ -28,10 +28,13 @@ from bot_news_retriever import NewsRetrieverBot
 from data_structures import TradingDecision as CoreTradingDecision, ActionSignal, AssetAnalysisInput
 
 # Configuration imports
-from config_system import ALPACA_API_KEY, ALPACA_SECRET_KEY
+from config_system import (
+    ALPACA_API_KEY, ALPACA_SECRET_KEY, ALPACA_BASE_URL, PAPER_TRADING, ENABLE_TRADING_BOT,
+    DEFAULT_STOCK_TIMEFRAME, DEFAULT_CRYPTO_TIMEFRAME, TRADING_CYCLE_INTERVAL
+)
 from config_trading import (
     TRADING_ASSETS, MIN_CONFIDENCE, MAX_PORTFOLIO_RISK, 
-    MAX_POSITION_RISK, TRADING_CYCLE_INTERVAL
+    MAX_POSITION_RISK
 )
 
 logger = logging.getLogger(__name__)
@@ -174,7 +177,7 @@ class OrchestratorBot:
         Returns:
             bool: True if portfolio risk is acceptable, False otherwise
         """
-        print(f"\nPortfolio Risk Assessment...")
+        print(f"\nPortfolio Risk Assessment...")  # CLI/test output only
         
         try:
             # Get current positions from portfolio bot
@@ -206,19 +209,20 @@ class OrchestratorBot:
             portfolio_risk = self.risk_manager.calculate_portfolio_risk(position_objects)
             portfolio_risk_pct = portfolio_risk.get('portfolio_pnl_percent', 0)
 
-            print(f"   Portfolio Risk Level: {abs(portfolio_risk_pct)*100:.1f}%")
+            print(f"   Portfolio Risk Level: {abs(portfolio_risk_pct)*100:.1f}%")  # CLI/test output only
 
             # Check if we should halt trading due to high portfolio risk
             if abs(portfolio_risk_pct) > MAX_PORTFOLIO_RISK:
-                print(f"   PORTFOLIO RISK TOO HIGH ({abs(portfolio_risk_pct)*100:.1f}% > {MAX_PORTFOLIO_RISK*100:.1f}%)")
+                print(f"   PORTFOLIO RISK TOO HIGH ({abs(portfolio_risk_pct)*100:.1f}% > {MAX_PORTFOLIO_RISK*100:.1f}%)")  # CLI/test output only
                 return False
             else:
-                print(f"   Portfolio risk within acceptable limits")
+                print(f"   Portfolio risk within acceptable limits")  # CLI/test output only
                 return True
                 
         except Exception as e:
             logger.error(f"Error in portfolio risk assessment: {e}")
-            print(f"   Portfolio risk assessment failed, proceeding with caution")
+            print(f"   Portfolio risk assessment failed, proceeding with caution")  # CLI/test output only
+            logger.error("Proceeding with caution: returning True despite error in portfolio risk assessment.")
             return True  # Proceed with caution if assessment fails
     
     def _perform_ai_adaptation(self) -> Tuple[float, Optional[str]]:
@@ -369,54 +373,99 @@ class OrchestratorBot:
                     'allocation_usd': allocation_usd
                 }
                 trading_decisions.append((decision, extra))
-                print(f"      Trade decision approved for {symbol}")
+                print(f"      Trade decision approved for {symbol}")  # CLI/test output only
                 
             except Exception as e:
                 logger.error(f"Error analyzing {symbol}: {e}")
-                print(f"   Error processing {symbol}: {e}")
+                print(f"   Error processing {symbol}: {e}")  # CLI/test output only
+                logger.error("Continuing to next asset after error in analysis.")
                 continue
         
-        print(f"\nGenerated {len(trading_decisions)} trading decisions")
+        print(f"\nGenerated {len(trading_decisions)} trading decisions")  # CLI/test output only
         return trading_decisions
     
     def _get_asset_analysis(self, symbol: str, asset_type: str, prompt_note: Optional[str]) -> Dict[str, Any]:
-        """Get AI analysis for a specific asset, including news insights and reflection insights"""
+        """Get AI analysis for a specific asset, including news insights and reflection insights, with LLM answer memory/reuse and news sentiment similarity."""
         try:
-            # Get historical analysis context from database (RAG)
-            historical_context = self._get_historical_analysis_context(symbol)
-            # Get recent reflection insights for this symbol
-            reflection_insights = self.reflection_bot.generate_enhanced_prompt_note(symbol)
-            # === NEWS INSIGHTS ===
+            # === Gather current news sentiment and embedding ===
             news_query = f"{symbol} stock news" if asset_type == 'stock' else f"{symbol} crypto news"
             news_articles = self.news_retriever.fetch_news(news_query, max_results=5)
             news_chunks = self.news_retriever.preprocess_and_chunk(news_articles)
             self.news_retriever.generate_embeddings(news_chunks)
             news_summary = self.news_retriever.augment_context_and_llm(news_query)
-            # Enhanced prompt note with historical, reflection, and news context
-            enhanced_prompt = prompt_note or ""
+            # Use the first embedding as a summary embedding for similarity (could be improved)
+            current_news_embedding = news_chunks[0].embedding if news_chunks and hasattr(news_chunks[0], 'embedding') else None
+
+            # === LLM ANSWER MEMORY/REUSE LOGIC with news sentiment similarity ===
+            recent_analyses = self.database_bot.get_analysis_context(symbol, context_types=['llm_analysis'], days=3, limit=10)
+            similar_past = None
+            similarity_threshold = 0.85  # Cosine similarity threshold for news context
+            if current_news_embedding:
+                for entry in recent_analyses:
+                    ctx = entry.get('context_data', {})
+                    past_embedding = ctx.get('news_embedding')
+                    if past_embedding:
+                        # Compute cosine similarity
+                        import numpy as np
+                        v1, v2 = np.array(current_news_embedding), np.array(past_embedding)
+                        sim = float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2) + 1e-8))
+                        if sim > similarity_threshold:
+                            similar_past = ctx
+                            logger.info(f"[LLM_MEMORY] Found similar past LLM answer for {symbol} (news similarity={sim:.2f}). Reusing.")
+                            break
+            if similar_past:
+                return {
+                    'action': similar_past.get('raw_llm_response', {}).get('action'),
+                    'confidence': similar_past.get('raw_llm_response', {}).get('confidence'),
+                    'reasoning': similar_past.get('raw_llm_response', {}).get('reasoning'),
+                    'source': 'memory',
+                    'timestamp': similar_past.get('timestamp'),
+                    'news_similarity': sim
+                }
+            # 2. If moderate-confidence answer exists, use as prior context for new LLM call (fallback to old logic)
+            # (Omitted for brevity, can be added as needed)
+            # === CONTEXT GATHERING ===
+            historical_context = self._get_historical_analysis_context(symbol)
+            reflection_insights = self.reflection_bot.generate_enhanced_prompt_note(symbol)
+            enhanced_prompt = (prompt_note or "")
             if historical_context:
                 enhanced_prompt += f"\n\nHistorical Analysis Context:\n{historical_context}"
             if reflection_insights:
                 enhanced_prompt += f"\n\n{reflection_insights}"
             if news_summary:
                 enhanced_prompt += f"\n\nNews Insights:\n{news_summary}"
-            # Get analysis from appropriate bot
+            # 3. Make new LLM call if no suitable prior exists
             if asset_type == 'stock':
                 analysis = self.stock_bot.analyze_stock(symbol, prompt_note=enhanced_prompt)
             elif asset_type == 'crypto':
                 analysis = self.crypto_bot.analyze_crypto(symbol, prompt_note=enhanced_prompt)
             else:
                 return {'error': f'Unknown asset type: {asset_type}'}
-            # Ensure the analysis is always a dictionary
+            # 4. Store full LLM response context in database, including news embedding
+            context_data = {
+                'symbol': symbol,
+                'asset_type': asset_type,
+                'prompt': enhanced_prompt,
+                'news_summary': news_summary,
+                'news_embedding': current_news_embedding,
+                'reflection_insights': reflection_insights,
+                'historical_context': historical_context,
+                'raw_llm_response': analysis,
+                'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+            }
+            self.database_bot.store_analysis_context(symbol, 'llm_analysis', context_data, relevance_score=analysis.get('confidence', 0.0))
+            logger.info(f"[LLM_MEMORY] Stored new LLM analysis for {symbol} in database.")
+            # 5. Mark source as fresh LLM call
             if isinstance(analysis, dict):
+                analysis['source'] = 'fresh_llm_call'
                 return analysis
             elif isinstance(analysis, str):
-                return {'result': analysis}
+                return {'result': analysis, 'source': 'fresh_llm_call'}
             else:
-                return {'error': 'Unknown analysis result type'}
+                return {'error': 'Unknown analysis result type', 'source': 'fresh_llm_call'}
         except Exception as e:
             logger.error(f"Error getting analysis for {symbol}: {e}")
-            return {'error': str(e)}
+            return {'error': str(e), 'source': 'error'}
     
     def _get_historical_analysis_context(self, symbol: str) -> str:
         """

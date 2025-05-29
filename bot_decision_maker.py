@@ -60,6 +60,7 @@ class DecisionMakerBot:
         """
         Make final trading decision based on analysis input and filters
         Logs detailed info for crypto assets: symbol, action, confidence, and reasoning.
+        Implements post-processing override for unjustified 'hold' actions if all indicators are present.
         
         Args:
             analysis_input: Analysis from StockBot/CryptoBot/AIBot
@@ -104,8 +105,46 @@ class DecisionMakerBot:
             signal = ActionSignal.HOLD
         # Apply confidence adjustments and filters as needed (simplified)
         adjusted_confidence = confidence
+        # === POST-PROCESSING OVERRIDE FOR UNJUSTIFIED 'HOLD' ===
+        # If action is 'hold', confidence is low, and all required indicators are present and not contradictory, override to BUY/SELL with low confidence
+        override_triggered = False
+        if signal == ActionSignal.HOLD:
+            indicators = analysis_input.technical_indicators or {}
+            # Check for presence of all required indicators (RSI, MACD, SMA20, price vs SMA20)
+            required_keys = ['rsi', 'macd', 'sma_20', 'price_vs_sma20']
+            all_present = all(k in indicators and indicators[k] is not None for k in required_keys)
+            contradictory = False
+            # Simple contradiction check: e.g., RSI overbought + MACD positive = mixed
+            try:
+                rsi = float(indicators.get('rsi', 0))
+                macd = float(indicators.get('macd', 0))
+                sma_20 = float(indicators.get('sma_20', 0))
+                price_vs_sma20 = float(indicators.get('price_vs_sma20', 0))
+                # Example: if all are neutral (not extreme), not contradictory
+                if (30 < rsi < 70) and (-0.5 < macd < 0.5) and (-1 < price_vs_sma20 < 1):
+                    contradictory = False
+                # If RSI > 70 and MACD > 0, that's not contradictory (bullish)
+                # If RSI < 30 and MACD < 0, that's not contradictory (bearish)
+                # If RSI > 70 and MACD < 0, that's contradictory
+                elif (rsi > 70 and macd < 0) or (rsi < 30 and macd > 0):
+                    contradictory = True
+            except Exception:
+                pass
+            # If all indicators present, not contradictory, and confidence is low, override
+            if all_present and not contradictory and adjusted_confidence < min_confidence:
+                # Choose BUY or SELL based on indicator direction
+                if rsi < 40 and macd < 0:
+                    override_action = 'sell'
+                else:
+                    override_action = 'buy'
+                logger.warning(f"[HOLD_OVERRIDE] Overriding unjustified HOLD for {analysis_input.symbol}: All indicators present, not contradictory, low confidence. Forcing {override_action.upper()} with confidence {min_confidence:.2f}. Rationale: {rationale}")
+                override_triggered = True
+                signal = ActionSignal[override_action.upper()]
+                adjusted_confidence = min_confidence
+                rationale = f"[OVERRIDE] Forced {override_action.upper()} due to unjustified HOLD with all indicators present. Original rationale: {rationale}"
         # Always include final_action for downstream compatibility
         final_action = signal.name.lower() if hasattr(signal, 'name') else str(signal).lower()
+        # Return actionable decision if confidence and filters are met
         if adjusted_confidence >= min_confidence and signal in [ActionSignal.BUY, ActionSignal.SELL]:
             return TradingDecision(
                 symbol=analysis_input.symbol,
@@ -116,7 +155,8 @@ class DecisionMakerBot:
                     'source': 'DecisionMakerBot',
                     'raw_market_data': analysis_input.market_data,
                     'raw_technical_indicators': analysis_input.technical_indicators,
-                    'final_action': final_action
+                    'final_action': final_action,
+                    'hold_override': override_triggered
                 },
                 final_action=final_action
             )
@@ -130,7 +170,8 @@ class DecisionMakerBot:
                     'source': 'DecisionMakerBot',
                     'raw_market_data': analysis_input.market_data,
                     'raw_technical_indicators': analysis_input.technical_indicators,
-                    'final_action': 'hold'
+                    'final_action': 'hold',
+                    'hold_override': override_triggered
                 },
                 final_action='hold'
             )
@@ -149,10 +190,16 @@ class DecisionMakerBot:
         """
         Make trading decisions for multiple assets using canonical types
         """
-        return [
-            self.make_trading_decision(a, min_confidence, current_portfolio_risk, market_conditions)
-            for a in analyses
-        ]
+        # Log batch decision start
+        logger.info(f"Batch making decisions for {len(analyses)} assets.")
+        results = []
+        for a in analyses:
+            decision = self.make_trading_decision(a, min_confidence, current_portfolio_risk, market_conditions)
+            # Log if hold override was triggered for any asset
+            if getattr(decision, 'metadata', {}).get('hold_override'):
+                logger.info(f"[BATCH_HOLD_OVERRIDE] {decision.symbol}: Hold override triggered in batch decision.")
+            results.append(decision)
+        return results
     
     # def prepare_asset_analysis_input(self, symbol):
     #     # Retrieve recent insights and context
@@ -165,3 +212,52 @@ class DecisionMakerBot:
     #         historical_ai_context=historical_ai_context,
     #         # ...other fields...
     #     )
+
+def selftest_decision_maker_bot():
+    """Standalone self-test for DecisionMakerBot: tests decision logic and min_confidence application."""
+    print(f"\n--- Running DecisionMakerBot Self-Test ---")
+    from data_structures import AssetAnalysisInput
+    from config_trading import MIN_CONFIDENCE
+    try:
+        bot = DecisionMakerBot()
+        # Test case 1: High confidence, BUY
+        input_buy = AssetAnalysisInput(
+            symbol="AAPL",
+            market_data={"action": "buy", "confidence": MIN_CONFIDENCE + 0.1, "reasoning": "Strong uptrend."},
+            technical_indicators={},
+            reflection_insights=None,
+            historical_ai_context=None
+        )
+        decision_buy = bot.make_trading_decision(input_buy, min_confidence=MIN_CONFIDENCE)
+        assert decision_buy.final_action == "buy", f"Expected BUY, got {decision_buy.final_action}"
+        print("    -> BUY decision logic passed.")
+        # Test case 2: High confidence, SELL
+        input_sell = AssetAnalysisInput(
+            symbol="TSLA",
+            market_data={"action": "sell", "confidence": MIN_CONFIDENCE + 0.2, "reasoning": "Bearish reversal."},
+            technical_indicators={},
+            reflection_insights=None,
+            historical_ai_context=None
+        )
+        decision_sell = bot.make_trading_decision(input_sell, min_confidence=MIN_CONFIDENCE)
+        assert decision_sell.final_action == "sell", f"Expected SELL, got {decision_sell.final_action}"
+        print("    -> SELL decision logic passed.")
+        # Test case 3: Low confidence, should HOLD
+        input_hold = AssetAnalysisInput(
+            symbol="GOOGL",
+            market_data={"action": "buy", "confidence": MIN_CONFIDENCE - 0.05, "reasoning": "Weak signal."},
+            technical_indicators={},
+            reflection_insights=None,
+            historical_ai_context=None
+        )
+        decision_hold = bot.make_trading_decision(input_hold, min_confidence=MIN_CONFIDENCE)
+        assert decision_hold.final_action == "hold", f"Expected HOLD, got {decision_hold.final_action}"
+        print("    -> HOLD (low confidence) logic passed.")
+        print(f"--- DecisionMakerBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- DecisionMakerBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- DecisionMakerBot Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    selftest_decision_maker_bot()

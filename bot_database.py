@@ -581,3 +581,49 @@ if __name__ == "__main__":
     print("Performance metrics:", db.get_performance_metrics("BTC/USD"))
     # Print comprehensive performance
     print("Comprehensive performance:", db.get_comprehensive_performance("BTC/USD"))
+
+def selftest_database_bot():
+    """Standalone self-test for DatabaseBot: tests CRUD for TradeOutcome and ReflectionInsight."""
+    print(f"\n--- Running DatabaseBot Self-Test ---")
+    import os
+    test_db = 'test_trading_history.db'
+    try:
+        # Remove test DB if exists
+        if os.path.exists(test_db):
+            os.remove(test_db)
+        db = DatabaseBot(db_file=test_db)
+        # Test 1: Save and retrieve analysis
+        analysis_id = db.save_analysis(
+            symbol="AAPL", asset_type="stock",
+            analysis={'action': 'buy', 'reasoning': 'Test reason', 'confidence': 0.8},
+            current_price=100.0
+        )
+        history = db.get_analysis_history("AAPL", days=7)
+        assert any(str(analysis_id) in str(row) for row in history), "Analysis not found in history."
+        print("    -> Save/retrieve analysis logic passed.")
+        # Test 2: Save and retrieve reflection insight
+        refl_id = db.store_reflection_insight(
+            symbol="AAPL", trade_id="T1", original_analysis_id=analysis_id,
+            entry_price=100.0, exit_price=110.0, pnl=10.0, hold_duration_hours=1.0,
+            market_conditions="test", ai_reflection="insight", key_insights="key", lessons_learned="lesson", confidence_accuracy=1.0
+        )
+        insights = db.get_reflection_insights("AAPL", days=7)
+        assert any("insight" in str(row) for row in insights), "Reflection insight not found."
+        print("    -> Save/retrieve reflection insight logic passed.")
+        # Test 3: Save and retrieve screening result
+        db.store_screening_results(
+            market_sentiment="bullish", market_volatility=10.0, risk_environment="low",
+            selected_assets=["AAPL"], screening_scores={"AAPL": 90}, ai_insights="insight", top_sectors=["Tech"]
+        )
+        print("    -> Save screening results logic passed.")
+        print(f"--- DatabaseBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- DatabaseBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- DatabaseBot Self-Test encountered an ERROR: {e} ---")
+    finally:
+        if os.path.exists(test_db):
+            os.remove(test_db)
+
+if __name__ == "__main__":
+    selftest_database_bot()

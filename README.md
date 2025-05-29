@@ -34,6 +34,13 @@
 
 3. **Configure your API keys and settings:**
    - Edit `config_system.py` and set your Alpaca, Gemini, NewsAPI, and other API keys as needed.
+   - **To avoid exceeding your Gemini free quota:**
+     - Set `TRADING_CYCLE_INTERVAL` in `config_system.py` to at least `60` seconds (or higher, e.g., `120` seconds) for testing.
+     - Limit the number of assets in `TRADING_ASSETS` in `config_trading.py` to 1-2 assets during tests.
+     - Set `MAX_TOKENS` in `config_system.py` to a lower value (e.g., `500`).
+     - Set `TEMPERATURE` in `config_system.py` to `0.5` or lower for more deterministic, shorter responses.
+     - Avoid running multiple bots or tests in parallel that use the Gemini API.
+     - Monitor your quota usage in the Google Cloud Console.
 
 4. **Run the trading bot:**
    ```powershell
@@ -43,6 +50,13 @@
 ## Troubleshooting
 - If you see errors about missing C headers (like `longintrepr.h` or `aiohttp` build failures), make sure you have installed the Microsoft C++ Build Tools.
 - If you use a different Python version, some dependencies may not work. Python 3.10 is recommended.
+
+## Alpaca US Stock Data Troubleshooting
+
+- If you receive empty data for US stocks (e.g., AAPL) when using the free IEX feed, this is a limitation of Alpaca's IEX data coverage. Not all stocks are available, and data may be delayed or missing outside US market hours.
+- **US Stock Market Hours:** 9:30am–4:00pm Eastern Time (ET), Monday–Friday (excluding market holidays). Data may be unavailable or delayed outside these hours.
+- For full, real-time US stock data, upgrade to SIP (paid) or use another provider.
+- To explicitly use the free IEX feed, set `feed=DataFeed.IEX` in your Alpaca API requests.
 
 ## Configuration Files Overview
 
@@ -92,6 +106,10 @@ StockAgenticAI uses two main configuration files:
   - *Extended simulation, paper trading*
 
 ---
+
+# Gemini API keys are now managed exclusively by GeminiKeyManagerBot.
+# Do NOT set or reference GEMINI_API_KEY in the environment or code.
+# All Gemini API access is handled via GeminiKeyManagerBot for quota rotation and failover.
 
 ## How to Use the Visualizer and Log Monitoring 
 
@@ -253,4 +271,204 @@ python main.py > trading.log 2>&1
 
 This will help with debugging and long-term monitoring.
 
-**This setup ensures anyone can replicate your environment with minimal manual steps and maximum safety.**
+---
+
+## Bot Interaction & Data Access Guide
+
+This section provides instructions on how to directly access information from your bots for debugging and monitoring.
+
+### How to Access Trading Data & Logs Manually (from Python interactive shell)
+
+1. **Open a Python interactive shell** in your project's root directory (where `main.py` and `bot_visualizer.py` are located):
+   ```powershell
+   python
+   ```
+
+2. **Import necessary modules and initialize bots/connect to DB:**
+   ```python
+   from bot_database import DatabaseBot
+   from bot_portfolio import PortfolioBot
+   from bot_visualizer import VisualizerBot, display_interactive_log_viewer
+   from config_system import TOTAL_CAPITAL, ALPACA_API_KEY, ALPACA_SECRET_KEY, PAPER_TRADING
+   from bot_trade_executor import TradeExecutorBot
+   from bot_ai import AIBot
+   from bot_report import ReportBot
+   from bot_gemini_key_manager import GeminiKeyManagerBot
+
+   db_bot = DatabaseBot()
+   portfolio_bot = PortfolioBot(initial_capital=TOTAL_CAPITAL)
+   visualizer = VisualizerBot()
+   trade_executor = TradeExecutorBot(api_key=ALPACA_API_KEY, api_secret=ALPACA_SECRET_KEY, paper_trading=PAPER_TRADING)
+   ai_bot = AIBot()
+   report_bot = ReportBot()
+   gemini_key_manager = GeminiKeyManagerBot()
+   ```
+
+3. **Retrieve Trading Database Information:**
+   - **Get Portfolio Metrics:**
+     ```python
+     portfolio_metrics = portfolio_bot.get_portfolio_metrics()
+     print("\n--- Current Portfolio Metrics ---")
+     for key, value in portfolio_metrics.items():
+         print(f"{key}: {value}")
+     ```
+
+   - **Get Open Positions:**
+     ```python
+     open_positions_memory = portfolio_bot.get_open_positions()
+     print("\n--- Open Positions (from PortfolioBot) ---")
+     if open_positions_memory:
+         for pos_symbol, pos_data in open_positions_memory.items():
+             print(f"Symbol: {pos_symbol}, Data: {pos_data}")
+     else:
+         print("No open positions in PortfolioBot.")
+     ```
+
+   - **Get Trade History:**
+     ```python
+     trade_history_memory = portfolio_bot.get_trade_history()
+     print("\n--- Trade History (from PortfolioBot) ---")
+     if trade_history_memory:
+         for trade in trade_history_memory:
+             print(trade)
+     else:
+         print("No completed trades in PortfolioBot's current session.")
+
+     trade_history_db = db_bot.get_trade_history()
+     print("\n--- Trade History (from DatabaseBot) ---")
+     if trade_history_db:
+         for trade in trade_history_db:
+             print(trade)
+     else:
+         print("No completed trades in DatabaseBot.")
+     ```
+
+   - **Get Reflection Insights:**
+     ```python
+     print("\n--- Latest Reflection Insights (via VisualizerBot) ---")
+     visualizer.display_reflection_insights(limit=5)
+     ```
+
+   - **Get Account Information (via TradeExecutorBot):**
+     ```python
+     account_info = trade_executor.get_account()
+     print("\n--- Alpaca Account Info ---")
+     if account_info:
+         for key, value in account_info.items():
+             print(f"{key}: {value}")
+     else:
+         print("Could not retrieve account info.")
+     ```
+
+   - **Generate Comprehensive Bot Status Report:**
+     ```python
+     report_bot.generate_comprehensive_report() # This will save a file. Check for the timestamped .txt file.
+     print("\n--- Triggering Comprehensive Report Generation (Check for new .txt file) ---")
+     ```
+
+   - **View Logs in Real-Time:**
+     ```python
+     print("\n--- Real-time Log Viewer (Press Ctrl+C to stop) ---")
+     display_interactive_log_viewer('trading.log')
+     # You can also filter for important events:
+     # display_interactive_log_viewer('trading.log', filter_keywords=['TRADE_OUTCOME', 'DECISION', 'ERROR'])
+     ```
+
+---
+
+# Bot Architecture & Capabilities
+
+StockAgenticAI is a modular, agentic trading system composed of specialized bots, each responsible for a distinct aspect of the trading workflow. Key bots include:
+
+- **DecisionMakerBot**: Generates trading decisions using RAG and news context.
+- **TradeExecutorBot**: Executes trades via broker APIs (e.g., Alpaca).
+- **PortfolioBot**: Tracks portfolio state and metrics.
+- **DatabaseBot**: Stores trades, positions, and insights.
+- **NewsRetrieverBot**: Fetches and summarizes relevant news.
+- **ReflectionBot**: Analyzes past trades and logs insights for continual learning.
+- **RiskManagerBot**: Monitors and enforces risk constraints on trades and portfolio.
+- **ReportBot**: Generates comprehensive status and health reports for all bots.
+- **KnowledgeGraphBot**: (New) Maintains a knowledge graph linking trading decisions and outcomes for AI learning and analysis.
+
+All bots are integrated and communicate via shared data structures and logging. Each bot supports a `selftest()` method for health checks and regression testing.
+
+---
+
+## KnowledgeGraphBot: AI Learning & Decision Tracking
+
+**File:** `bot_knowledge_graph.py`
+
+The `KnowledgeGraphBot` is a pilot module that uses a knowledge graph (via NetworkX) to link trading decisions and trade outcomes. This enables advanced AI learning, pattern discovery, and future explainability features.
+
+**Capabilities:**
+- Add nodes for `TradingDecision` and `TradeOutcome`.
+- Link decisions to their resulting outcomes.
+- Query relationships for analysis or visualization.
+- Includes a robust `selftest()` for graph operations.
+
+**Example Usage:**
+```python
+from bot_knowledge_graph import KnowledgeGraphBot
+kg_bot = KnowledgeGraphBot()
+decision_id = kg_bot.add_decision(symbol="AAPL", action="BUY", reason="Strong earnings")
+outcome_id = kg_bot.add_outcome(symbol="AAPL", result="WIN", pnl=42.0)
+kg_bot.link_decision_to_outcome(decision_id, outcome_id)
+print(kg_bot.query_decision_outcomes(decision_id))
+kg_bot.selftest()  # Runs internal tests
+```
+
+---
+
+## Selftest & Health Checks
+
+All major bots implement a `selftest()` method for rapid health checks and regression testing. This ensures that each bot's core logic, integration points, and data flows are functioning as expected.
+
+**How to run a bot's selftest:**
+```python
+from bot_reflection import ReflectionBot
+ReflectionBot().selftest()
+
+from bot_risk_manager import RiskManagerBot
+RiskManagerBot().selftest()
+
+from bot_report import ReportBot
+ReportBot().selftest()
+
+from bot_knowledge_graph import KnowledgeGraphBot
+KnowledgeGraphBot().selftest()
+```
+
+**How to run all tests (including integration):**
+```
+pytest
+```
+
+---
+
+## CI/CD & Automated Log Monitoring (Preview)
+
+Automated test runs and log monitoring are being added for continuous integration and operational reliability. See Section 5.2 in the TODO.txt for upcoming details.
+
+---
+
+## Automated Test Runs & Log Monitoring
+
+A PowerShell script is provided to automate running all tests and checking the trading log for errors or critical issues.
+
+**To use:**
+
+1. Open PowerShell in your project directory.
+2. Run:
+   ```powershell
+   .\run_tests_and_log_check.ps1
+   ```
+   - This will:
+     - Run all Python tests using `pytest`.
+     - Scan `trading.log` for any lines containing `ERROR` or `CRITICAL`.
+     - Print a summary of any issues found.
+
+**Note:**
+- Ensure you have run `main.py` at least once to generate `trading.log`.
+- For continuous integration (CI), you can adapt this script for use in GitHub Actions or other CI/CD systems.
+
+---

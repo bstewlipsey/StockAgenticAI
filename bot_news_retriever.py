@@ -87,3 +87,35 @@ class NewsRetrieverBot:
         context = '\n'.join([f"{n.title}: {n.full_text}" for n in relevant_news])
         prompt = f"Given the following news context, summarize and analyze for trading insights:\n\n{context}\n\nQuery: {query}\n"
         return self.ai_bot.generate_analysis("{prompt}", {"prompt": prompt})
+
+    @staticmethod
+    def selftest():
+        print(f"\n--- Running NewsRetrieverBot Self-Test ---")
+        try:
+            class DummyAIBot:
+                def generate_embedding(self, text):
+                    return [0.1] * 384
+            bot = NewsRetrieverBot()
+            bot.ai_bot = DummyAIBot()
+            # Use NewsArticle for type compatibility
+            dummy_article = NewsArticle(
+                title="Test News",
+                url="http://example.com",
+                date="2023-01-01",
+                source="UnitTest",
+                full_text="Test content."
+            )
+            bot.fetch_news = lambda query, max_results=10: [dummy_article]
+            articles = bot.fetch_news("AAPL")
+            assert articles and hasattr(articles[0], 'title'), "fetch_news did not return NewsArticle-like objects"
+            embeddings = bot.generate_embeddings(articles)
+            assert embeddings and isinstance(embeddings[0], list), "generate_embeddings did not return embeddings"
+            print("    -> NewsRetrieverBot fetch_news() and generate_embeddings() returned valid results.")
+            print(f"--- NewsRetrieverBot Self-Test PASSED ---")
+        except AssertionError as e:
+            print(f"--- NewsRetrieverBot Self-Test FAILED: {e} ---")
+        except Exception as e:
+            print(f"--- NewsRetrieverBot Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    NewsRetrieverBot.selftest()

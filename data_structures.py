@@ -104,3 +104,18 @@ class AssetScreeningResult:
     confidence: float = 0.0
     asset_type: str = "stock"  # Default to stock, set to 'crypto' for crypto assets
     allocation_usd: Optional[float] = None  # USD allocation for this asset
+
+@dataclass
+class LLMAnalysisMemory:
+    """Stores a past LLM analysis for memory-based decision making."""
+    symbol: str
+    action: str
+    confidence: float
+    reasoning: str
+    timestamp: str
+    news_sentiment: Optional[Dict[str, Any]] = None
+    technical_indicators: Optional[Dict[str, Any]] = None
+    market_data: Optional[Dict[str, Any]] = None
+    reflection_insights: Optional[List[str]] = None
+    ai_model: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)

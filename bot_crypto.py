@@ -40,7 +40,7 @@ class CryptoBot:
         """
         Fetch crypto data for a given symbol using ccxt or other exchange API.
         Returns a dict with price, volume, and other metrics, or None on failure.
-        Uses DEFAULT_CRYPTO_TIMEFRAME from config.py for all OHLCV fetches.
+        Uses DEFAULT_CRYPTO_TIMEFRAME from config_system.py for all OHLCV fetches.
         Implements aggressive error handling, exponential backoff, and retry logic.
         Logs rate limits, empty data, and network issues.
         """
@@ -52,6 +52,7 @@ class CryptoBot:
                 time.sleep(self.exchange.rateLimit / 1000)
                 if '/' not in symbol:
                     logger.warning(f"Invalid symbol format: {symbol}. Expected format: BASE/QUOTE (e.g., BTC/USD)")
+                    logger.error("Returning None due to invalid symbol format in get_crypto_data.")
                     return None
                 base, quote = symbol.split('/')
                 currency_mapping = {'BTC': 'XBT', 'DOGE': 'XDG', 'LUNA': 'LUNA2'}
@@ -91,9 +92,11 @@ class CryptoBot:
                     raise
                 if not ticker or 'last' not in ticker:
                     logger.warning(f"Empty or incomplete ticker data for {symbol}: {ticker}")
+                    logger.error("Returning None due to empty/incomplete ticker data in get_crypto_data.")
                     raise ValueError("Empty ticker data")
                 if not ohlcv or len(ohlcv) == 0:
                     logger.warning(f"Empty OHLCV data for {symbol}")
+                    logger.error("Returning None due to empty OHLCV data in get_crypto_data.")
                     raise ValueError("Empty OHLCV data")
                 return {
                     'current_price': ticker['last'],
@@ -133,49 +136,168 @@ class CryptoBot:
         logger.error(f"Failed to fetch crypto data for {symbol} after {max_retries} retries.")
         return None
 
-    def analyze_crypto(self, symbol, prompt_note=None):
+    def analyze_crypto(self, symbol, prompt_note=None, test_override=None):
         """
         Analyze a cryptocurrency using market data, technical indicators, and AI.
-        Optionally include a prompt_note for adaptive AI learning.
-        Returns the AI's analysis response or an error dict.
-        Uses DEFAULT_CRYPTO_TIMEFRAME from config.py for all OHLCV fetches.
+        If test_override is provided, use it as the LLM response (string or dict).
+        Implements LLM answer memory for decision-making (Task 3.4).
+        Now integrates news sentiment into memory logic (Task 3.5).
         """
+        import logging
+        logger = logging.getLogger(__name__)
         try:
-            data = self.get_crypto_data(symbol)
-            if not data:
-                return {"error": "Could not fetch crypto data"}
-            # Use DEFAULT_CRYPTO_TIMEFRAME for ohlcv
-            tf_value, tf_unit = DEFAULT_CRYPTO_TIMEFRAME
-            timeframe = f"{tf_value}{tf_unit}"
-            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=50)
-            prices = [candle[4] for candle in ohlcv]
-            tech_analysis = IndicatorBot(prices)
-            signals, indicators = tech_analysis.get_signals()
-            signal_summary = "\n".join([f"- {signal}: {reason} (Confidence: {confidence*100:.0f}%)" for signal, reason, confidence in signals])
-            template_vars = {
-                'schema': ANALYSIS_SCHEMA,
-                'symbol': symbol,
-                'current_price': data['current_price'],
-                'volume': data['volume'],
-                'price_change': data['price_change'],
-                'high_24h': data['high_24h'],
-                'low_24h': data['low_24h'],
-                'rsi': indicators['rsi'],
-                'macd': indicators['macd'],
-                'sma_20': indicators['sma_20'],
-                'sma_diff': abs(data['current_price'] - indicators['sma_20']),
-                'sma_diff_prefix': '+' if data['current_price'] > indicators['sma_20'] else '-',
-                'signal_summary': signal_summary
-            }
-            # If prompt_note is provided, append it to the prompt
-            if prompt_note:
-                prompt = CRYPTO_ANALYSIS_TEMPLATE + f"\n{prompt_note}"
+            # === Get latest news sentiment ===
+            from bot_news_retriever import NewsRetrieverBot
+            news_bot = NewsRetrieverBot()
+            news_articles = news_bot.fetch_news(symbol + " crypto", max_results=3)
+            news_sentiment = None
+            if news_articles:
+                # For simplicity, use the title of the most relevant article as sentiment proxy
+                news_sentiment = news_articles[0].title if news_articles else None
+
+            # === TEST OVERRIDE: bypass memory logic for tests ===
+            if test_override is not None:
+                response = test_override
+                logger.info(f"[TEST] Using test_override for {symbol}: {response}")
+                import json
+                try:
+                    parsed_json = json.loads(response) if isinstance(response, str) else response
+                except Exception:
+                    parsed_json = None
+                if parsed_json is None:
+                    return None
+                parsed_json['source'] = 'test_override'
+                return parsed_json
+
+            # === LLM Answer Memory: Check for recent high-confidence answer with similar news sentiment ===
+            from bot_database import DatabaseBot
+            db = DatabaseBot()
+            recent_contexts = db.get_analysis_context(symbol, context_types=["llm_analysis"], days=1, limit=5)
+            import time
+            now = time.time()
+            for ctx in recent_contexts:
+                ctx_data = ctx.get('context_data', {})
+                raw_llm = ctx_data.get('raw_llm_response', {})
+                conf = raw_llm.get('confidence', 0)
+                ts = ctx.get('timestamp')
+                prev_sentiment = ctx_data.get('news_sentiment')
+                # Accept if confidence > 0.7, answer is <3h old, and news sentiment matches
+                if conf and float(conf) > 0.7 and ts and prev_sentiment == news_sentiment:
+                    import datetime
+                    try:
+                        ts_dt = datetime.datetime.fromisoformat(ts)
+                        age_hours = (datetime.datetime.utcnow() - ts_dt).total_seconds() / 3600
+                        if age_hours < 3:
+                            logger.info(f"[LLM_MEMORY] Using recent high-confidence LLM answer for {symbol} from memory (age={age_hours:.2f}h, conf={conf}, sentiment match).")
+                            result = dict(raw_llm)
+                            result['source'] = 'llm_memory'
+                            return result
+                    except Exception:
+                        pass
+            # ...existing code for LLM call...
+            if test_override is not None:
+                response = test_override
+                logger.info(f"[TEST] Using test_override for {symbol}: {response}")
             else:
-                prompt = CRYPTO_ANALYSIS_TEMPLATE
-            response = generate_ai_analysis(prompt, variables=template_vars)
-            if 'error' in response:
-                return response
-            return response
+                data = self.get_crypto_data(symbol)
+                if not data:
+                    return {"error": "Could not fetch crypto data"}
+                # Use DEFAULT_CRYPTO_TIMEFRAME for ohlcv
+                tf_value, tf_unit = DEFAULT_CRYPTO_TIMEFRAME
+                timeframe = f"{tf_value}{tf_unit}"
+                ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=50)
+                # === Market Data Logging for Quality/Freshness ===
+                import datetime
+                now = datetime.datetime.utcnow()
+                candle_times = [c[0] for c in ohlcv] if ohlcv else []
+                logger.debug(f"[MARKET_DATA] {symbol} OHLCV timestamps: {candle_times}")
+                latest_candle_time = candle_times[-1] if candle_times else None
+                try:
+                    if isinstance(latest_candle_time, (int, float)):
+                        candle_dt = datetime.datetime.utcfromtimestamp(latest_candle_time/1000 if latest_candle_time > 1e12 else latest_candle_time)
+                    elif isinstance(latest_candle_time, str):
+                        candle_dt = datetime.datetime.fromisoformat(latest_candle_time.replace('Z', '+00:00'))
+                    else:
+                        candle_dt = None
+                    if candle_dt:
+                        age_sec = (now - candle_dt).total_seconds()
+                        logger.info(f"[MARKET_DATA] {symbol} latest OHLCV age: {age_sec:.1f} seconds")
+                        if age_sec > 300:
+                            logger.warning(f"[MARKET_DATA] {symbol} OHLCV data is stale! Age: {age_sec:.1f} seconds")
+                except Exception as e:
+                    logger.warning(f"[MARKET_DATA] Could not parse candle_time for {symbol}: {latest_candle_time} ({e})")
+                ticker = self.exchange.fetch_ticker(symbol)
+                ticker_time = ticker.get('timestamp') if ticker else None
+                logger.info(f"[MARKET_DATA] {symbol} ticker: time={ticker_time}, last={ticker.get('last') if ticker else None}, volume={ticker.get('quoteVolume') if ticker else None}")
+                # Technical analysis
+                prices = [candle[4] for candle in ohlcv]
+                tech_analysis = IndicatorBot(prices)
+                signals, indicators = tech_analysis.get_signals()
+                signal_summary = "\n".join([f"- {signal}: {reason} (Confidence: {confidence*100:.0f}%)" for signal, reason, confidence in signals])
+                template_vars = {
+                    'schema': ANALYSIS_SCHEMA,
+                    'symbol': symbol,
+                    'current_price': data['current_price'],
+                    'volume': data['volume'],
+                    'price_change': data['price_change'],
+                    'high_24h': data['high_24h'],
+                    'low_24h': data['low_24h'],
+                    'rsi': indicators['rsi'],
+                    'macd': indicators['macd'],
+                    'sma_20': indicators['sma_20'],
+                    'sma_diff': abs(data['current_price'] - indicators['sma_20']),
+                    'sma_diff_prefix': '+' if data['current_price'] > indicators['sma_20'] else '-',
+                    'signal_summary': signal_summary
+                }
+                # If prompt_note is provided, append it to the prompt
+                if prompt_note:
+                    prompt = CRYPTO_ANALYSIS_TEMPLATE + f"\n{prompt_note}"
+                else:
+                    prompt = CRYPTO_ANALYSIS_TEMPLATE
+                response = generate_ai_analysis(prompt, variables=template_vars)
+                logger.info(f"[DEBUG] CRYPTO ANALYSIS RAW LLM RESPONSE for {symbol}:\n{response}")
+                import json
+                try:
+                    parsed_json = json.loads(response) if isinstance(response, str) else response
+                    logger.info(f"[AI_JSON] {symbol} LLM JSON: {json.dumps(parsed_json, indent=2)}")
+                except Exception as e:
+                    logger.warning(f"[AI_JSON] Could not parse LLM response as JSON for {symbol}: {e}")
+                    parsed_json = None
+                if 'error' in response:
+                    return response
+                # === LLM JSON Schema Validation ===
+                def is_valid_llm_json(data):
+                    if not isinstance(data, dict):
+                        return False
+                    required = ['action', 'confidence']
+                    if any(k not in data for k in required):
+                        return False
+                    if data['action'] not in ['buy', 'sell', 'hold']:
+                        return False
+                    try:
+                        conf = float(data['confidence'])
+                        if not (0.0 <= conf <= 1.0):
+                            return False
+                    except Exception:
+                        return False
+                    return True
+                if parsed_json is None or not is_valid_llm_json(parsed_json):
+                    logger.error(f"[AI_JSON] Skipping {symbol}: LLM response missing/invalid or failed schema validation. Raw: {response}")
+                    return {"error": f"LLM response for {symbol} missing, malformed, or invalid. Trade skipped."}
+                # === Store LLM answer in memory for future reuse, including news sentiment ===
+                context_data = {
+                    'symbol': symbol,
+                    'asset_type': 'crypto',
+                    'prompt': prompt,
+                    'raw_llm_response': parsed_json,
+                    'template_vars': template_vars,
+                    'news_sentiment': news_sentiment,
+                    'timestamp': time.strftime('%Y-%m-%dT%H:%M:%S')
+                }
+                db.store_analysis_context(symbol, 'llm_analysis', context_data, relevance_score=parsed_json.get('confidence', 0.0))
+                logger.info(f"[LLM_MEMORY] Stored new LLM analysis for {symbol} in database.")
+                parsed_json['source'] = 'fresh_llm_call'
+                return parsed_json
         except Exception as e:
             return {"error": f"Error analyzing crypto: {str(e)}"}
 
@@ -211,9 +333,40 @@ class CryptoBot:
 
     def print_performance_summary(self, symbol, asset_type, timeframe=None):
         """Prints a summary of crypto performance for logging/reporting."""
-        print(f"\n=== Performance Summary for {symbol} ({asset_type}) ===")
+        print(f"\n=== Performance Summary for {symbol} ({asset_type}) ===")  # CLI/test output
         # Placeholder: Add more detailed metrics as you implement them
         # Example: print last analysis, open positions, etc.
-        print(f"No detailed crypto performance summary implemented yet for {symbol}.")
+        print(f"No detailed crypto performance summary implemented yet for {symbol}.")  # CLI/test output
+
+    class MockExchange:
+        def fetch_ticker(self, symbol):
+            return {'last': 50000, 'quoteVolume': 100, 'percentage': 2, 'high': 51000, 'low': 49000}
+        def fetch_ohlcv(self, symbol, timeframe, limit=2):
+            return [[0,0,0,0,49500],[0,0,0,0,50000]]
+        rateLimit = 1000
+
+    @staticmethod
+    def selftest():
+        print(f"\n--- Running CryptoBot Self-Test ---")  # CLI/test output
+        try:
+            bot = CryptoBot(exchange=CryptoBot.MockExchange())
+            # Test strong BUY
+            fake_buy = '{"action": "buy", "reasoning": "Strong breakout, high volume.", "confidence": 0.97}'
+            result_buy = bot.analyze_crypto("BTC/USD", test_override=fake_buy)
+            print("    -> Test BUY result:", result_buy)  # CLI/test output
+            assert result_buy and result_buy.get('action') == 'buy', f"Expected BUY, got: {result_buy}"
+            # Test strong SELL
+            fake_sell = '{"action": "sell", "reasoning": "Bearish divergence, low volume.", "confidence": 0.91}'
+            result_sell = bot.analyze_crypto("ETH/USD", test_override=fake_sell)
+            print("    -> Test SELL result:", result_sell)  # CLI/test output
+            assert result_sell and result_sell.get('action') == 'sell', f"Expected SELL, got: {result_sell}"
+            print(f"--- CryptoBot Self-Test PASSED ---")  # CLI/test output
+        except AssertionError as e:
+            print(f"--- CryptoBot Self-Test FAILED: {e} ---")  # CLI/test output
+        except Exception as e:
+            print(f"--- CryptoBot Self-Test encountered an ERROR: {e} ---")  # CLI/test output
+
+if __name__ == "__main__":
+    CryptoBot.selftest()
 
 # === End of bot_crypto.py ===

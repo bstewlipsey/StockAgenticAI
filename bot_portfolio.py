@@ -121,6 +121,35 @@ class PortfolioBot:
         print("\nOpen positions:", self.get_open_positions())
         print("Trade history:", self.get_trade_history())
 
+def selftest_portfolio_bot():
+    """Standalone self-test for PortfolioBot: tests position management and metrics."""
+    print(f"\n--- Running PortfolioBot Self-Test ---")
+    try:
+        bot = PortfolioBot(initial_capital=10000)
+        # Test 1: Add position
+        bot.add_or_update_position("AAPL", "stock", 10, 150)
+        assert "AAPL" in bot.get_open_positions(), "AAPL should be in open positions."
+        print("    -> Add position logic passed.")
+        # Test 2: Update position (add more)
+        bot.add_or_update_position("AAPL", "stock", 5, 160)
+        pos = bot.get_open_positions()["AAPL"]
+        assert pos.quantity == 15, f"Expected 15 shares, got {pos.quantity}"
+        print("    -> Update position logic passed.")
+        # Test 3: Close position
+        bot.close_position("AAPL", 170)
+        assert "AAPL" not in bot.get_open_positions(), "AAPL should be closed."
+        assert len(bot.get_trade_history()) == 1, "Trade history should have 1 trade."
+        print("    -> Close position logic passed.")
+        # Test 4: Portfolio metrics
+        metrics = bot.get_portfolio_metrics()
+        assert isinstance(metrics, dict) and "total_return" in metrics, "Metrics missing 'total_return'."
+        print("    -> Portfolio metrics logic passed.")
+        print(f"--- PortfolioBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- PortfolioBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- PortfolioBot Self-Test encountered an ERROR: {e} ---")
+
 # === Usage Example ===
 if __name__ == "__main__":
     portfolio = PortfolioBot(initial_capital=10000)
@@ -134,3 +163,5 @@ if __name__ == "__main__":
     print("Trade history:", portfolio.get_trade_history())
     # Print portfolio summary
     portfolio.print_portfolio_summary()
+
+    selftest_portfolio_bot()

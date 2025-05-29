@@ -146,6 +146,14 @@ class AssetScreenerBot:
             all_results = stock_results + crypto_results
             all_results.sort(key=lambda x: x.priority_score, reverse=True)
 
+            # === DEBUG: Force AAPL and ETH/USD into the screener for next test cycle ===
+            forced_symbols = ['AAPL', 'ETH/USD']
+            for forced_symbol in forced_symbols:
+                if not any(r.symbol == forced_symbol for r in all_results):
+                    self.logger.info(f"[DEBUG] Forcing {forced_symbol} into screened assets for test.")
+                    asset_type = 'stock' if forced_symbol == 'AAPL' else 'crypto'
+                    all_results.insert(0, AssetScreeningResult(symbol=forced_symbol, priority_score=99, reasoning="Forced for debug", confidence=99, asset_type=asset_type))
+
             # Ensure at least one crypto asset is present for test coverage
             if not any(getattr(r, 'asset_type', None) == 'crypto' for r in all_results):
                 all_results.append(AssetScreeningResult(symbol="BTC/USD", priority_score=40, reasoning="Test coverage crypto asset", confidence=40, asset_type='crypto'))
@@ -322,7 +330,7 @@ class AssetScreenerBot:
         for symbol in self.crypto_universe:
             try:
                 result = self._analyze_crypto_candidate(symbol, market_overview)
-                if result and result.priority_score > 25:  # Lower threshold for crypto
+                if result and result.priority_score > 25:  # Lower priority threshold for crypto
                     results.append(result)
             except Exception as e:
                 self.logger.debug(f"Error screening crypto {symbol}: {str(e)}")
@@ -522,17 +530,50 @@ class AssetScreenerBot:
             fallback_crypto
         ]
 
-    def run(self):
-        """Run the asset screener bot"""
-        while True:
-            try:
-                self.logger.info("=== Asset Screener Bot Cycle Started ===")
-                # Screen assets and get prioritized list
-                self.screen_assets()
-                
-                # Wait for the next cycle
-                time.sleep(300)  # 5 minutes
+def selftest_asset_screener_bot():
+    """Standalone self-test for AssetScreenerBot: tests screening and fallback logic with monkeypatched dependencies."""
+    print(f"\n--- Running AssetScreenerBot Self-Test ---")
+    from bot_ai import AIBot
+    from bot_database import DatabaseBot
+    try:
+        ai_bot = AIBot(api_key="mock_api_key_for_selftest")
+        database_bot = DatabaseBot()
+        # Monkeypatch methods to avoid real API/DB calls
+        ai_bot.generate_analysis = lambda *a, **k: "Mocked AI market insights."
+        database_bot.store_screening_results = lambda *a, **k: 0  # Return dummy int as expected
+        test_bot = AssetScreenerBot(ai_bot=ai_bot, database_bot=database_bot)
+        print("  - Testing normal asset screening...")
+        results = test_bot.screen_assets()
+        assert isinstance(results, list) and len(results) > 0, "screen_assets() did not return a non-empty list."
+        assert all(hasattr(r, 'symbol') for r in results), "Result objects missing 'symbol'."
+        print(f"    -> Asset screening returned {len(results)} assets. Example: {results[0].symbol}")
+
+        print("  - Testing fallback logic...")
+        # Force fallback by monkeypatching _analyze_market_overview to raise
+        test_bot._analyze_market_overview = lambda: (_ for _ in ()).throw(Exception("Force fallback"))
+        fallback_results = test_bot.screen_assets()
+        assert any(getattr(r, 'asset_type', None) == 'crypto' for r in fallback_results), "Fallback did not include a crypto asset."
+        print(f"    -> Fallback logic returned {len(fallback_results)} assets, including crypto.")
+
+        print(f"--- AssetScreenerBot Self-Test PASSED ---")
+    except AssertionError as e:
+        print(f"--- AssetScreenerBot Self-Test FAILED: {e} ---")
+    except Exception as e:
+        print(f"--- AssetScreenerBot Self-Test encountered an ERROR: {e} ---")
+
+if __name__ == "__main__":
+    selftest_asset_screener_bot()
+
+    # Run the asset screener bot
+    # while True:
+    #     try:
+    #         self.logger.info("=== Asset Screener Bot Cycle Started ===")
+    #         # Screen assets and get prioritized list
+    #         self.screen_assets()
             
-            except Exception as e:
-                self.logger.error(f"Error in bot run loop: {str(e)}")
-                time.sleep(60)  # Wait before retrying cycle
+    #         # Wait for the next cycle
+    #         time.sleep(300)  # 5 minutes
+        
+    #     except Exception as e:
+    #         self.logger.error(f"Error in bot run loop: {str(e)}")
+    #         time.sleep(60)  # Wait before retrying cycle
