@@ -8,41 +8,51 @@ Think of these as the 'knobs and dials' that control how aggressive or conservat
 NOTE: All variables in this file are referenced by the trading system, bots, or tests. Avoid duplicating system/API variables from config_system.py. Keep only trading/strategy variables here for clarity and maintainability.
 """
 
-# === Portfolio Risk Settings ===
-TOTAL_CAPITAL = 100000.0
-
-# === Assets to Trade & Per-Asset USD Allocation (Combined) ===
-# Section 2.3: Force known assets for paper trading test
+# =========================
+# [ASSET_SETTINGS]
+# =========================
 TRADING_ASSETS = [
-    ("AAPL",    "stock", 500),
-    ("BTC/USD", "crypto", 200),
-]
-
+    ("AAPL", "stock", 500),
+]  # Reduced to 1 asset for Section 6.1 test cycle
 DEFAULT_TRADE_AMOUNT_USD = 500
 
-# Risk Management Settings
+# =========================
+# [RISK_MANAGEMENT]
+# =========================
+TOTAL_CAPITAL = 100000.0
 MAX_PORTFOLIO_RISK = 0.02
 MAX_POSITION_SIZE = 0.02
 MAX_POSITION_RISK = 0.01  # 1% per position for realistic risk
 STOCK_STOP_LOSS_PCT = 0.02
 CRYPTO_STOP_LOSS_PCT = 0.05
+MIN_CONFIDENCE = (
+    0.1  # Aggressively lowered for HOLD debugging (restore to 0.3+ for production)
+)
+HOLD_OVERRIDE_THRESHOLD = 0.7  # If AI confidence is below this and action is HOLD, override to BUY/SELL. Documented: If AI returns HOLD with confidence < threshold, system may override to a more decisive action. Adjust as needed for production.
 
-# === Trading Strategy Settings ===
-MIN_CONFIDENCE = 0.1  # Aggressively lowered for HOLD debugging (restore to 0.3+ for production)
-# TRADING_CYCLE_INTERVAL is defined in config_system.py (system-wide setting)
+# =========================
+# [POSITION_SIZING]
+# =========================
+MAX_POSITION_SIZE = 0.02
+MIN_TRADE_VALUE = 1.0  # Lowered for test mode to ensure trades can be placed
+MIN_TRADE_VALUE_CRYPTO = 1.0  # Lowered for test mode to ensure trades can be placed
+MAX_ASSET_ALLOCATION = 0.2
+MAX_ASSET_ALLOCATION_CRYPTO = 0.1
+DAILY_RISK_LIMIT = 0.05
+DAILY_RISK_LIMIT_CRYPTO = 0.1
+TRANSACTION_FEES = 0.001
+TRANSACTION_FEES_CRYPTO = 0.002
 
-# === Technical Indicator Thresholds ===
-RSI_OVERSOLD = 35  # More sensitive for test
-RSI_OVERBOUGHT = 65  # More sensitive for test
-SMA_WINDOW = 10  # Shorter window for more signals during test
+# =========================
+# [TECHNICAL_INDICATORS]
+# =========================
+RSI_OVERSOLD = 35
+RSI_OVERBOUGHT = 65
+SMA_WINDOW = 10
 
-# === AI Analysis Templates ===
-# The following are defined ONLY in config_system.py and should NOT be duplicated here:
-# - TRADING_CYCLE_INTERVAL
-# - ANALYSIS_SCHEMA
-# - CRYPTO_ANALYSIS_TEMPLATE
-# - STOCK_ANALYSIS_TEMPLATE
-
+# =========================
+# [LLM_STRATEGY]
+# =========================
 LLM_TIMEFRAME_PROMPT_EXAMPLES = """
 - For Alpaca, 1 hour bars: '1H'
 - For Kraken, 1 hour bars: '1h'
@@ -53,51 +63,20 @@ LLM_TIMEFRAME_PROMPT_EXAMPLES = """
 """
 
 # --- DecisionMakerBot Parameters ---
-# These factors are tuned separately for stocks and crypto to avoid bias.
-CONFIDENCE_BOOST_FACTORS = {
-    'news': 1.2,         # Stock news boost
-    'technical': 1.1,    # Stock technicals boost
-    'fundamental': 1.15  # Stock fundamentals boost
-}
-CONFIDENCE_BOOST_FACTORS_CRYPTO = {
-    'news': 1.1,         # Crypto news is more volatile
-    'technical': 1.05,   # Technicals less reliable for thinly traded pairs
-    'on_chain': 1.2      # On-chain signals for crypto
-}
-RISK_PENALTY_FACTORS = {
-    'volatility': 0.9,   # Stock volatility penalty
-    'drawdown': 0.85     # Stock drawdown penalty
-}
-RISK_PENALTY_FACTORS_CRYPTO = {
-    'volatility': 0.7,   # Crypto is more volatile, penalize more
-    'drawdown': 0.8,     # Crypto drawdown penalty
-    'illiquidity': 0.7   # Penalize illiquid crypto pairs
-}
-FILTERS_ENABLED = {
-    'min_confidence': True, # Enforce min confidence for stocks
-    'max_risk': True        # Enforce max risk for stocks
-}
-FILTERS_ENABLED_CRYPTO = {
-    'min_confidence': True, # Enforce min confidence for crypto
-    'max_risk': True,      # Enforce max risk for crypto
-    'min_volume': True     # Require min volume for crypto
-}
+CONFIDENCE_BOOST_FACTORS = {"news": 1.2, "technical": 1.1, "fundamental": 1.15}
+CONFIDENCE_BOOST_FACTORS_CRYPTO = {"news": 1.1, "technical": 1.05, "on_chain": 1.2}
+RISK_PENALTY_FACTORS = {"volatility": 0.9, "drawdown": 0.85}
+RISK_PENALTY_FACTORS_CRYPTO = {"volatility": 0.7, "drawdown": 0.8, "illiquidity": 0.7}
+FILTERS_ENABLED = {"min_confidence": True, "max_risk": True}
+FILTERS_ENABLED_CRYPTO = {"min_confidence": True, "max_risk": True, "min_volume": True}
 
-# === Screening Parameters ===
-MIN_MARKET_CAP = 1_000_000_000  # For stocks
-MIN_MARKET_CAP_CRYPTO = 100_000_000  # Lower for crypto
-MIN_VOLUME = 1_000_000  # For stocks
-MIN_VOLUME_CRYPTO = 100_000  # Lower for crypto pairs
-
-# === Sizing and Risk Parameters (Crypto & Stock) ===
-MIN_TRADE_VALUE = 10  # Minimum trade value for stocks (USD)
-MIN_TRADE_VALUE_CRYPTO = 5  # Minimum trade value for crypto (USD)
-MAX_ASSET_ALLOCATION = 0.2  # Max allocation per asset (20% of capital) for stocks
-MAX_ASSET_ALLOCATION_CRYPTO = 0.1  # Max allocation per asset (10% of capital) for crypto
-DAILY_RISK_LIMIT = 0.05  # Max daily risk (5% of capital) for stocks
-DAILY_RISK_LIMIT_CRYPTO = 0.1  # Max daily risk (10% of capital) for crypto
-TRANSACTION_FEES = 0.001  # 0.1% per trade for stocks
-TRANSACTION_FEES_CRYPTO = 0.002  # 0.2% per trade for crypto
+# =========================
+# [SCREENING]
+# =========================
+MIN_MARKET_CAP = 1_000_000_000
+MIN_MARKET_CAP_CRYPTO = 100_000_000
+MIN_VOLUME = 1_000_000
+MIN_VOLUME_CRYPTO = 100_000
 
 # --- ReflectionBot Parameters ---
 MIN_REFLECTION_PNL = 10.0

@@ -6,14 +6,13 @@ from colorama import init, Style
 from bot_orchestrator import OrchestratorBot
 from bot_report import ReportBot
 
-# Configuration imports
-from config_system import ENABLE_TRADING_BOT
 
 def main():
     # Initialize colorama for Windows
     init()
-    logging.basicConfig(level=logging.INFO)
-    logger = logging.getLogger(__name__)
+    # Set up logging with the correct format for all logs
+    from utils.logging_setup import setup_logging
+    setup_logging()
 
     print(f"\n{Style.BRIGHT}[AI] Starting StockAgenticAI...{Style.RESET_ALL}")
 
@@ -25,8 +24,9 @@ def main():
         print("\n[AI] Trading loop interrupted by user.")
     finally:
         print("\n[AI] Generating shutdown report...")
-        report_bot.generate_comprehensive_report(reason='shutdown')
+        report_bot.generate_comprehensive_report(reason="shutdown")
         print("[AI] Shutdown report generated.")
+
 
 if __name__ == "__main__":
     main()

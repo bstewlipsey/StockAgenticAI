@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 # Load .env if present
 load_dotenv()
 
-API_KEY = os.getenv('ALPACA_API_KEY')
-API_SECRET = os.getenv('ALPACA_SECRET_KEY')
+API_KEY = os.getenv("ALPACA_API_KEY")
+API_SECRET = os.getenv("ALPACA_SECRET_KEY")
+
 
 # Test stock data fetch for MSFT
 def fetch_msft_bars():
@@ -19,10 +20,11 @@ def fetch_msft_bars():
         symbol_or_symbols="MSFT",
         timeframe=timeframe,
         limit=5,
-        feed=DataFeed.IEX  # Use free IEX feed
+        feed=DataFeed.IEX,  # Use free IEX feed
     )
     bars = client.get_stock_bars(request_params)
     print("MSFT bars:", bars)
+
 
 client = CryptoHistoricalDataClient(API_KEY, API_SECRET)
 
@@ -32,9 +34,7 @@ tf_value = 1
 timeframe = TimeFrame(tf_value, TimeFrameUnit.Day)
 
 request_params = CryptoBarsRequest(
-    symbol_or_symbols="BTC/USD",
-    timeframe=timeframe,
-    limit=5
+    symbol_or_symbols="BTC/USD", timeframe=timeframe, limit=5
 )
 
 bars = client.get_crypto_bars(request_params)

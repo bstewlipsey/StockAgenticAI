@@ -4,276 +4,446 @@ This document lists all major functions (with arguments and return types) for th
 
 ---
 
-## PortfolioBot
-- __init__(self, initial_capital: float = TOTAL_CAPITAL) -> None
-  - Arguments: initial_capital (float, optional)
+## AssetScreenerBot
+- __init__(self, ai_bot: AIBot, database_bot: DatabaseBot) -> None
+  # Initializes the asset screener with AI and database bots for screening logic and persistence.
+  - Arguments: ai_bot (AIBot), database_bot (DatabaseBot)
   - Returns: None
-- add_or_update_position(self, symbol: str, asset_type: str, quantity: float, entry_price: float) -> None
-  - Arguments: symbol (str), asset_type (str), quantity (float), entry_price (float)
-  - Returns: None
-- close_position(self, symbol: str, exit_price: float) -> None
-  - Arguments: symbol (str), exit_price (float)
-  - Returns: None
-- calculate_metrics(self) -> dict
-  - Returns: dict with keys: total_return, win_rate, avg_profit, avg_loss, largest_gain, largest_loss
-- get_portfolio_metrics(self) -> dict
-  - Returns: dict (see above)
-- get_open_positions(self) -> dict[str, Trade]
-  - Returns: dict[str, Trade]
-- get_trade_history(self) -> list[Trade]
-  - Returns: list[Trade]
-- print_portfolio_summary(self) -> None
-  - Returns: None
-- selftest() [@staticmethod] -> bool
-  - Returns: bool (True if self-test passes)
-
----
-
-## StockBot
-- __init__(self) -> None
-- get_current_price(self, symbol: str) -> float | None
-  - Arguments: symbol (str)
-  - Returns: float or None
-- analyze_stock(self, symbol: str, prompt_note: str = None) -> dict
-  - Arguments: symbol (str), prompt_note (str, optional)
-  - Returns: dict (AI analysis or error)
-- print_performance_summary(self, symbol: str, asset_type: str, timeframe, days_back: int = 50) -> None
-  - Arguments: symbol (str), asset_type (str), timeframe, days_back (int, default 50)
-  - Returns: None
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+- screen_assets(self, market_conditions: Optional[Dict] = None) -> List[AssetScreeningResult]
+  # Screens assets based on market conditions and AI/database insights, returns prioritized list.
+  - Arguments: market_conditions (dict, optional)
+  - Returns: list[AssetScreeningResult] (prioritized assets)
+- selftest_asset_screener_bot() [standalone function] -> None
+  # Runs a self-test to verify asset screener logic and outputs results.
+  - Returns: None (prints test results)
 
 ---
 
 ## CryptoBot
 - __init__(self, exchange = None) -> None
+  # Initializes the crypto bot with an optional exchange interface.
+  - Arguments: exchange (optional)
+  - Returns: None
 - get_crypto_data(self, symbol: str, max_retries: int = 5) -> dict
+  # Fetches crypto data for a symbol, with retry logic for robustness.
   - Arguments: symbol (str), max_retries (int, default 5)
   - Returns: dict (crypto data)
 - analyze_crypto(self, symbol: str, prompt_note: str = None) -> dict
+  # Analyzes a crypto asset using LLM prompts and returns structured analysis or error.
   - Arguments: symbol (str), prompt_note (str, optional)
   - Returns: dict (AI analysis or error)
 - monitor_positions(self) -> None
+  # Monitors open crypto positions for risk and performance.
   - Returns: None
 - print_performance_summary(self, symbol: str, asset_type: str, timeframe = None) -> None
+  # Prints a summary of performance for a given crypto asset and timeframe.
   - Arguments: symbol (str), asset_type (str), timeframe (optional)
   - Returns: None
 - selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify CryptoBot's core logic and returns True if successful.
+  - Returns: bool
+
+---
+
+## DatabaseBot
+- __init__(self, db_file: str = "trading_history.db") -> None
+  # Initializes the database bot with the specified database file.
+  - Arguments: db_file (str, default "trading_history.db")
+  - Returns: None
+- save_analysis(self, symbol: str, asset_type: str, analysis: dict, current_price: float, context_data: dict = None) -> int
+  # Saves an AI analysis result to the database and returns the analysis ID.
+  - Arguments: symbol (str), asset_type (str), analysis (dict), current_price (float), context_data (dict, optional)
+  - Returns: int (analysis_id)
+- get_analysis_history(self, symbol: str, days: int = 30) -> list[dict]
+  # Retrieves analysis history for a symbol over a given period.
+  - Arguments: symbol (str), days (int, default 30)
+  - Returns: list[dict]
+- store_reflection_insight(self, symbol: str, trade_id: str, original_analysis_id: int, entry_price: float, exit_price: float, pnl: float, hold_duration_hours: float, market_conditions: str, ai_reflection: str, key_insights: str, lessons_learned: str, confidence_accuracy: float) -> int
+  # Stores post-trade reflection insights for future learning and returns row ID.
+  - Arguments: symbol (str), trade_id (str), original_analysis_id (int), entry_price (float), exit_price (float), pnl (float), hold_duration_hours (float), market_conditions (str), ai_reflection (str), key_insights (str), lessons_learned (str), confidence_accuracy (float)
+  - Returns: int (row id)
+- get_reflection_insights(self, symbol: str = None, days: int = 90) -> list[dict]
+  # Retrieves stored reflection insights for a symbol or all symbols.
+  - Arguments: symbol (str, optional), days (int, default 90)
+  - Returns: list[dict]
+- store_screening_results(self, market_sentiment: str, market_volatility: float, risk_environment: str, selected_assets: list[str], screening_scores: dict, ai_insights: str, top_sectors: list[str]) -> int
+  # Stores asset screening results and returns row ID.
+  - Arguments: market_sentiment (str), market_volatility (float), risk_environment (str), selected_assets (list[str]), screening_scores (dict), ai_insights (str), top_sectors (list[str])
+  - Returns: int (row id)
+- get_screening_history(self, days: int = 7) -> list[dict]
+  # Retrieves asset screening history for a given period.
+  - Arguments: days (int, default 7)
+  - Returns: list[dict]
+- store_analysis_context(self, symbol: str, context_type: str, context_data: dict, relevance_score: float = 1.0, expires_hours: int = None) -> int
+  # Stores context data for an analysis, with optional expiry.
+  - Arguments: symbol (str), context_type (str), context_data (dict), relevance_score (float, default 1.0), expires_hours (int, optional)
+  - Returns: int (row id)
+- get_analysis_context(self, symbol: str, context_types: list[str] = None, days: int = 30, limit: int = 20) -> list[dict]
+  # Retrieves context data for a symbol and context types.
+  - Arguments: symbol (str), context_types (list[str], optional), days (int, default 30), limit (int, default 20)
+  - Returns: list[dict]
+- store_trade_outcome(self, symbol: str, asset_type: str, trade_type: str, entry_price: float, exit_price: float, quantity: float, hold_duration_minutes: int, original_confidence: float, analysis_id: int, execution_status: str, fees: float = 0.0) -> int
+  # Stores the outcome of a trade for performance tracking.
+  - Arguments: symbol (str), asset_type (str), trade_type (str), entry_price (float), exit_price (float), quantity (float), hold_duration_minutes (int), original_confidence (float), analysis_id (int), execution_status (str), fees (float, default 0.0)
+  - Returns: int (row id)
+- get_trade_outcomes(self, symbol: str = None, days: int = 30) -> list[dict]
+  # Retrieves trade outcomes for a symbol or all symbols.
+  - Arguments: symbol (str, optional), days (int, default 30)
+  - Returns: list[dict]
+- get_performance_metrics(self, symbol: str) -> dict
+  # Calculates and returns performance metrics for a symbol.
+  - Arguments: symbol (str)
+  - Returns: dict
+- get_comprehensive_performance(self, symbol: str = None, days: int = 30) -> dict
+  # Returns comprehensive performance metrics for a symbol or all symbols.
+  - Arguments: symbol (str, optional), days (int, default 30)
+  - Returns: dict
+- get_cross_asset_insights(self, asset_type: str = None, days: int = 30) -> list[dict]
+  # Retrieves insights across multiple assets for a given type.
+  - Arguments: asset_type (str, optional), days (int, default 30)
+  - Returns: list[dict]
+- get_signal_strength(self, symbol: str, lookback_days: int = 7)
+  # Calculates signal strength for a symbol over a lookback period.
+  - Arguments: symbol (str), lookback_days (int, default 7)
+  - Returns: tuple or value (signal strength info)
+- cleanup_expired_context(self) -> None
+  # Cleans up expired context data from the database.
+  - Returns: None
+- selftest_database_bot() [standalone function] -> None
+  # Runs a self-test to verify database operations.
+  - Returns: None (prints test results)
+
+---
+
+## DecisionMakerBot
+- __init__(self) -> None
+  # Initializes the decision maker bot.
+- make_trading_decision(self, analysis_input: AssetAnalysisInput, min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> TradingDecision
+  # Makes a trading decision (BUY/SELL/HOLD) based on analysis input and risk context.
+  - Arguments: analysis_input (AssetAnalysisInput), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
+  - Returns: TradingDecision
+- batch_make_decisions(self, analyses: list[AssetAnalysisInput], min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> list[TradingDecision]
+  # Makes trading decisions for a batch of analyses.
+  - Arguments: analyses (list[AssetAnalysisInput]), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
+  - Returns: list[TradingDecision]
+- selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify decision logic.
+  - Returns: bool
+
+---
+
+## OrchestratorBot
+- __init__(self) -> None
+  # Initializes the orchestrator bot.
+- run_trading_cycle(self) -> None
+  # Manages the entire trading cycle: screening, analysis, decision-making, execution, and reflection.
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify orchestration logic.
+  - Returns: bool
+
+---
+
+## PortfolioBot
+- __init__(self, initial_capital: float = TOTAL_CAPITAL) -> None
+  # Initializes the portfolio bot with starting capital.
+  - Arguments: initial_capital (float, optional)
+  - Returns: None
+- add_or_update_position(self, symbol: str, asset_type: str, quantity: float, entry_price: float) -> None
+  # Adds or updates a position in the portfolio.
+  - Arguments: symbol (str), asset_type (str), quantity (float), entry_price (float)
+  - Returns: None
+- close_position(self, symbol: str, exit_price: float) -> None
+  # Closes a position and updates portfolio state.
+  - Arguments: symbol (str), exit_price (float)
+  - Returns: None
+- calculate_metrics(self) -> dict
+  # Calculates portfolio metrics such as return, win rate, and drawdown.
+  - Returns: dict with keys: total_return, win_rate, avg_profit, avg_loss, largest_gain, largest_loss
+- get_portfolio_metrics(self) -> dict
+  # Returns the latest portfolio metrics.
+  - Returns: dict (see above)
+- get_open_positions(self) -> dict[str, Trade]
+  # Returns a dictionary of open positions.
+  - Returns: dict[str, Trade]
+- get_trade_history(self) -> list[Trade]
+  # Returns the trade history for the portfolio.
+  - Returns: list[Trade]
+- print_portfolio_summary(self) -> None
+  # Prints a summary of the current portfolio state.
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify portfolio logic.
+  - Returns: bool (True if self-test passes)
+
+---
+
+## PositionSizerBot
+- __init__(self, total_capital: float = TOTAL_CAPITAL, max_position_size: float = MAX_POSITION_SIZE) -> None
+  # Initializes the position sizer with capital and max position size.
+  - Arguments: total_capital (float, default TOTAL_CAPITAL), max_position_size (float, default MAX_POSITION_SIZE)
+  - Returns: None
+- calculate_position_size(self, price: float, confidence: float, volatility: float = None, available_cash: float = None, min_shares: int = 1, allow_fractional: bool = False, asset_type: str = None) -> float
+  # Calculates the optimal position size for a trade based on risk and capital.
+  - Arguments: price (float), confidence (float), volatility (float, optional), available_cash (float, optional), min_shares (int, default 1), allow_fractional (bool, default False), asset_type (str, optional)
+  - Returns: float (number of shares/units)
+- selftest_position_sizer_bot() [standalone function] -> None
+  # Runs a self-test to verify position sizing logic.
+  - Returns: None (prints test results)
+
+---
+
+## ReflectionBot
+- __init__(self) -> None
+  # Initializes the reflection bot and its dependencies.
+  # AIBot and DatabaseBot are instantiated internally.
+- analyze_completed_trade(self, trade_outcome: TradeOutcome) -> list[ReflectionInsight]
+  # Analyzes a completed trade and generates insights for future improvement.
+  - Arguments: trade_outcome (TradeOutcome)
+  - Returns: list[ReflectionInsight]
+- batch_analyze_recent_trades(self, days_back: int = 7) -> list[ReflectionInsight]
+  # Analyzes recent trades in batch for reflection and learning.
+  - Arguments: days_back (int, default 7)
+  - Returns: list[ReflectionInsight]
+- get_insights_for_symbol(self, symbol: str, limit: int = 10) -> list[ReflectionInsight]
+  # Retrieves reflection insights for a specific symbol.
+  - Arguments: symbol (str), limit (int, default 10)
+  - Returns: list[ReflectionInsight]
+- generate_enhanced_prompt_note(self, symbol: str) -> str
+  # Generates an enhanced prompt note for LLM analysis based on past insights.
+  - Arguments: symbol (str)
+  - Returns: str
+- selftest_reflection_bot() [standalone function] -> None
+  # Runs a self-test to verify reflection logic.
+  - Returns: None (prints test results)
+
+---
+
+## RiskManagerBot (RiskBot)
+- __init__(self, max_portfolio_risk: float = MAX_PORTFOLIO_RISK, max_position_risk: float = MAX_POSITION_RISK) -> None
+  # Initializes the risk manager with portfolio and position risk limits.
+  - Arguments: max_portfolio_risk (float, default MAX_PORTFOLIO_RISK), max_position_risk (float, default MAX_POSITION_RISK)
+  - Returns: None
+- analyze_position(self, position: Position) -> dict
+  # Analyzes risk for a single position and returns risk metrics.
+  - Arguments: position (Position)
+  - Returns: dict (risk metrics)
+- analyze_portfolio(self, positions: list[Position]) -> dict
+  # Analyzes risk for the entire portfolio and returns risk metrics.
+  - Arguments: positions (list[Position])
+  - Returns: dict (portfolio risk metrics)
+- recommend_position_size(self, capital: float, price: float, risk_per_share: float, min_shares: int = 1, allow_fractional: bool = False) -> float
+  # Recommends a position size based on risk per share and capital.
+  - Arguments: capital (float), price (float), risk_per_share (float), min_shares (int, default 1), allow_fractional (bool, default False)
+  - Returns: float (recommended position size)
+- selftest_risk_manager_bot() [standalone function] -> None
+  # Runs a self-test to verify risk management logic.
+  - Returns: None (prints test results) 
+
+---
+
+## StockBot
+- __init__(self) -> None
+  # Initializes the stock bot.
+- get_current_price(self, symbol: str) -> float | None
+  # Fetches the current price for a stock symbol.
+  - Arguments: symbol (str)
+  - Returns: float or None
+- analyze_stock(self, symbol: str, prompt_note: str = None) -> dict
+  # Analyzes a stock using LLM prompts and returns structured analysis or error.
+  - Arguments: symbol (str), prompt_note (str, optional)
+  - Returns: dict (AI analysis or error)
+- print_performance_summary(self, symbol: str, asset_type: str, timeframe, days_back: int = 50) -> None
+  # Prints a summary of performance for a given stock and timeframe.
+  - Arguments: symbol (str), asset_type (str), timeframe, days_back (int, default 50)
+  - Returns: None
+- selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify StockBot's core logic.
   - Returns: bool
 
 ---
 
 ## TradeExecutorBot
 - __init__(self, api_key: str, api_secret: str, paper_trading: bool = True) -> None
+  # Initializes the trade executor with API credentials and trading mode.
 - execute_trade(self, symbol: str, side: str, quantity: float, confidence: float) -> tuple[bool, dict | str]
+  # Executes a trade and returns a tuple of (success, result or error).
   - Arguments: symbol (str), side (str), quantity (float), confidence (float)
   - Returns: (bool, dict or str)
 - get_account(self) -> dict
+  # Retrieves account information from the broker/exchange.
   - Returns: dict (account info)
 - get_open_positions(self, asset_type: str = None) -> list | dict
+  # Retrieves open positions for a given asset type.
   - Arguments: asset_type (str, optional)
   - Returns: list or dict (positions)
 - close_position(self, symbol: str, quantity: float = None, asset_type: str = None) -> None
+  # Closes a position for a symbol and updates state.
   - Arguments: symbol (str), quantity (float, optional), asset_type (str, optional)
   - Returns: None
 - selftest() [@staticmethod] -> bool
+  # Runs a self-test to verify trade execution logic.
   - Returns: bool
 
 ---
 
-## DecisionMakerBot
-- __init__(self) -> None
-- make_trading_decision(self, analysis_input: AssetAnalysisInput, min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> TradingDecision
-  - Arguments: analysis_input (AssetAnalysisInput), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
-  - Returns: TradingDecision
-- batch_make_decisions(self, analyses: list[AssetAnalysisInput], min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> list[TradingDecision]
-  - Arguments: analyses (list[AssetAnalysisInput]), min_confidence (float), current_portfolio_risk (float, optional), market_conditions (dict, optional)
-  - Returns: list[TradingDecision]
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+# Agentic Stock AI - Bot Interaction Overview
+
+This document outlines the intended interactions and data flow between the main bots in the Agentic Stock AI system. Each bot is designed with a clear responsibility and communicates with others via well-defined interfaces, as described in the function reference.
 
 ---
 
-## ReflectionBot
-- __init__(self, database_bot: 'DatabaseBot', ai_bot: 'AIBot') -> None
-  # ai_bot is used for generating insights, database_bot for fetching/storing.
-- analyze_completed_trade(self, trade_outcome: TradeOutcome) -> list[ReflectionInsight]
-  - Arguments: trade_outcome (TradeOutcome)
-  - Returns: list[ReflectionInsight]
-- batch_analyze_recent_trades(self, days_back: int = 7) -> list[ReflectionInsight]
-  - Arguments: days_back (int, default 7)
-  - Returns: list[ReflectionInsight]
-- get_insights_for_symbol(self, symbol: str, limit: int = 10) -> list[ReflectionInsight]
-  - Arguments: symbol (str), limit (int, default 10)
-  - Returns: list[ReflectionInsight]
-- generate_enhanced_prompt_note(self, symbol: str) -> str
-  - Arguments: symbol (str)
-  - Returns: str
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+## 0. Orchestration and Control
+- **OrchestratorBot** manages the trading cycle, invokes each bot in sequence, handles scheduling, error recovery, and data passing.
+- Coordinates:
+    1. Calls AssetScreenerBot to get candidate assets.
+    2. For each asset, calls StockBot/CryptoBot for data and analysis.
+    3. Passes analysis to DecisionMakerBot.
+    4. Passes decision to RiskManagerBot and PositionSizerBot.
+    5. Passes size and decision to TradeExecutorBot.
+    6. Updates PortfolioBot and DatabaseBot.
+    7. Triggers ReflectionBot for post-trade learning.
+    8. Calls VisualizerBot and BotReport for reporting.
+    9. Integrates NewsRetrieverBot and KnowledgeGraphBot as needed.
+
+## 1. Asset Screening and Analysis
+- **AssetScreenerBot** identifies candidate assets (stocks/crypto) for trading based on market conditions and AI/database insights.
+- For each candidate asset:
+  - **StockBot** or **CryptoBot** fetches current price and market data.
+  - These bots call their respective `analyze_stock` or `analyze_crypto` methods, optionally using enhanced prompt notes from **ReflectionBot**.
+
+## 2. AI/LLM Analysis and Decision Making
+- **BotAI** (or similar AI/LLM interface) generates analysis for each asset.
+- **DecisionMakerBot** receives analysis (as `AssetAnalysisInput`) and portfolio risk context, then calls `make_trading_decision` to produce a `TradingDecision` (BUY/SELL/HOLD, confidence, etc).
+
+## 3. Position Sizing and Risk Management
+- **RiskManagerBot** evaluates current portfolio risk and individual position risk.
+- **PositionSizerBot** uses portfolio state and risk parameters to calculate position size for each trade, based on the `TradingDecision` and available capital.
+
+## 4. Trade Execution and Portfolio Update
+- **TradeExecutorBot** executes trades via broker/exchange API, using the symbol, side, quantity, and confidence from the decision and sizing bots.
+- On successful trade execution:
+  - **PortfolioBot** updates open positions and trade history.
+  - **DatabaseBot** records trade outcomes and relevant data.
+
+## 5. Post-Trade Reflection and Learning
+- **ReflectionBot** analyzes completed trades (via `analyze_completed_trade`) and generates insights, which can be used to enhance future AI prompts or asset screening.
+- **DatabaseBot** stores reflection insights for later retrieval.
+
+## 6. Visualization and Reporting
+- **VisualizerBot** displays price charts, signals, and performance summaries using data from **PortfolioBot**, **StockBot**, **CryptoBot**, and **ReflectionBot**.
+- **BotReport** (if present) generates system status and performance reports.
+
+## 7. News and Contextual Data
+- **NewsRetrieverBot** fetches and processes news relevant to assets, providing additional context for AI analysis and decision making.
+
+## 8. Backtesting and Strategy Validation
+- **BacktesterBot** runs historical simulations using the same decision, sizing, and risk logic as live trading, validating strategies before deployment.
+
+## 9. Knowledge Graph and Key Management
+- **KnowledgeGraphBot** tracks relationships between trading decisions and outcomes for advanced analytics.
+- **GeminiKeyManagerBot** manages API key usage and quota for LLM/AI services.
 
 ---
 
-## AssetScreenerBot
-- __init__(self, ai_bot, database_bot) -> None
-- screen_assets(self, market_conditions: dict = None) -> list[AssetScreeningResult]
-  - Arguments: market_conditions (dict, optional)
-  - Returns: list[AssetScreeningResult]
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+# Example Data Flow (Typical Trading Cycle)
+1. **AssetScreenerBot** → (assets) → **StockBot/CryptoBot** → (analysis) → **DecisionMakerBot**
+2. **DecisionMakerBot** → (decision) → **RiskManagerBot**/**PositionSizerBot**
+3. **PositionSizerBot** → (size) → **TradeExecutorBot**
+4. **TradeExecutorBot** → (result) → **PortfolioBot**/**DatabaseBot**
+5. **PortfolioBot**/**DatabaseBot** → (trade outcome) → **ReflectionBot**
+6. **ReflectionBot** → (insights) → **AssetScreenerBot**/**BotAI** (for prompt enhancement)
+7. **VisualizerBot** and **BotReport** use data from all bots for reporting and visualization.
 
 ---
 
-## BacktesterBot
-- __init__(self) -> None
-- run_backtest(self, config: BacktestConfig) -> BacktestResult
-  - Arguments: config (BacktestConfig)
-  - Returns: BacktestResult
-- run_parameter_sweep(self, base_config: BacktestConfig, parameter_ranges: dict) -> list[BacktestResult]
-  - Arguments: base_config (BacktestConfig), parameter_ranges (dict)
-  - Returns: list[BacktestResult]
-- validate_strategy_robustness(self, config: BacktestConfig, validation_periods: int = 5) -> dict
-  - Arguments: config (BacktestConfig), validation_periods (int, default 5)
-  - Returns: dict
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+# Notes
+- All bots are expected to pass data via function arguments/returns, not by direct attribute access.
+- Self-test methods (`selftest`) are available for most bots to verify correct operation.
+- For more details, see each bot's Python file and the function reference.
+
+
+# Agentic Stock AI - Manual Orchestration Function Reference
+
+This guide shows the recommended order and function calls to manually orchestrate a full trading cycle using the main bots.  
+**Call each function in this order, passing outputs as needed.**
 
 ---
 
-## NewsRetrieverBot
-- __init__(self) -> None
-- fetch_news(self, query: str, max_results: int = 10) -> list[NewsArticle]
-  - Arguments: query (str), max_results (int, default 10)
-  - Returns: list[NewsArticle]
-- preprocess_and_chunk(self, articles: list[NewsArticle], chunk_size: int = 512) -> list[NewsArticle]
-  - Arguments: articles (list[NewsArticle]), chunk_size (int, default 512)
-  - Returns: list[NewsArticle]
-- generate_embeddings(self, articles: list[NewsArticle]) -> list[list[float]]
-  - Arguments: articles (list[NewsArticle])
-  - Returns: list[list[float]]
-- similarity_search(self, query: str, top_k: int = 3) -> list[NewsArticle]
-  - Arguments: query (str), top_k (int, default 3)
-  - Returns: list[NewsArticle]
-- augment_context_and_llm(self, query: str) -> str
-  - Arguments: query (str)
-  - Returns: str
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+## 1. Asset Screening
+- **AssetScreenerBot**
+  - `screen_assets(market_conditions: Optional[Dict] = None) -> List[AssetScreeningResult]`
+    - Call to get a prioritized list of candidate assets.
+
+## 2. Data Fetch & Analysis
+- For each asset in the screening results:
+  - **StockBot** (for stocks)
+    - `analyze_stock(symbol: str, prompt_note: str = None) -> dict`
+  - **CryptoBot** (for crypto)
+    - `analyze_crypto(symbol: str, prompt_note: str = None) -> dict`
+  - Optionally, use `ReflectionBot.generate_enhanced_prompt_note(symbol)` for `prompt_note`.
+
+## 3. Decision Making
+- **DecisionMakerBot**
+  - `make_trading_decision(analysis_input: AssetAnalysisInput, min_confidence: float, current_portfolio_risk: float = 0.0, market_conditions: dict = None) -> TradingDecision`
+    - Pass the analysis result and context to get a trading decision.
+
+## 4. Risk & Position Sizing
+- **RiskManagerBot**
+  - `analyze_portfolio(positions: list[Position]) -> dict`
+    - (Optional) Analyze current portfolio risk.
+- **PositionSizerBot**
+  - `calculate_position_size(price: float, confidence: float, volatility: float = None, available_cash: float = None, min_shares: int = 1, allow_fractional: bool = False, asset_type: str = None) -> float`
+    - Use to determine how much to trade.
+
+## 5. Trade Execution
+- **TradeExecutorBot**
+  - `execute_trade(symbol: str, side: str, quantity: float, confidence: float) -> tuple[bool, dict | str]`
+    - Call to place the trade.
+
+## 6. Portfolio & Database Update
+- **PortfolioBot**
+  - `add_or_update_position(symbol: str, asset_type: str, quantity: float, entry_price: float) -> None`
+    - Update portfolio after trade.
+- **DatabaseBot**
+  - `store_trade_outcome(...)` and `save_analysis(...)`
+    - Record trade and analysis results.
+
+## 7. Post-Trade Reflection
+- **ReflectionBot**
+  - `analyze_completed_trade(trade_outcome: TradeOutcome) -> list[ReflectionInsight]`
+    - Analyze the trade for insights.
+
+## 8. Visualization & Reporting (Optional)
+- **VisualizerBot**
+  - `display charts, signals, summaries`
+- **BotReport**
+  - `generate system status and performance reports`
 
 ---
 
-## VisualizerBot
-- __init__(self, width: int = 50, height: int = 10) -> None
-  - Arguments: width (int, default 50), height (int, default 10)
-  - Returns: None
-- create_price_chart(self, prices: list[float], volumes: list[float] = None) -> list[str]
-  - Arguments: prices (list[float]), volumes (list[float], optional)
-  - Returns: list[str] (ASCII/Unicode chart lines)
-- detect_trend(self, prices: list[float], window: int = 5) -> str
-  - Arguments: prices (list[float]), window (int, default 5)
-  - Returns: str ('up', 'down', or 'sideways')
-- calculate_fibonacci_levels(self, prices: list[float]) -> dict
-  - Arguments: prices (list[float])
-  - Returns: dict (level: price)
-- detect_patterns(self, prices: list[float], window: int = 20) -> list[tuple]
-  - Arguments: prices (list[float]), window (int, default 20)
-  - Returns: list[tuple] (pattern, description)
-- visualize_signals(self, prices: list[float], signals, indicators: dict, volumes: list[float] = None) -> tuple[list[str], list[str]]
-  - Arguments: prices (list[float]), signals, indicators (dict), volumes (list[float], optional)
-  - Returns: tuple (list[str], list[str])
-- display_reflection_insights(self, symbol: str = None, limit: int = 10) -> None
-  - Arguments: symbol (str, optional), limit (int, default 10)
-  - Returns: None (prints to console)
-- display_performance_trends(self, symbol: str = None, days: int = 30) -> None
-  - Arguments: symbol (str, optional), days (int, default 30)
-  - Returns: None (prints to console)
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
+# Example Manual Trading Cycle (Pseudocode)
+
+```python
+assets = screener.screen_assets()
+for asset in assets:
+    if asset.type == "stock":
+        analysis = stock_bot.analyze_stock(asset.symbol)
+    else:
+        analysis = crypto_bot.analyze_crypto(asset.symbol)
+    decision = decision_maker.make_trading_decision(analysis, min_confidence)
+    if decision.action in ("buy", "sell"):
+        size = position_sizer.calculate_position_size(price, decision.confidence)
+        success, result = trade_executor.execute_trade(asset.symbol, decision.action, size, decision.confidence)
+        if success:
+            portfolio.add_or_update_position(asset.symbol, asset.type, size, price)
+            database.store_trade_outcome(...)
+            reflection_bot.analyze_completed_trade(...)
+```
 
 ---
 
-## IndicatorBot
-- __init__(self, prices: list[float], window: int = SMA_WINDOW) -> None
-  - Arguments: prices (list[float]), window (int, default SMA_WINDOW)
-  - Returns: None
-- calculate_indicators(self) -> dict
-  - Returns: dict (keys: rsi, macd, macd_signal, macd_histogram, sma_20, ema_20, bb_upper, bb_lower, obv, adi, vwap, current_price, has_signals)
-- get_signals(self) -> tuple[list[tuple], dict]
-  - Returns: tuple (list[tuple], dict) (signals, indicators)
-- selftest() [@staticmethod] -> bool
-  - Returns: bool
-- test_signals() [@staticmethod] -> bool
-  - Returns: bool
-
----
-
-## RiskManagerBot
-- __init__(self, portfolio_bot: 'PortfolioBot', max_portfolio_risk: float = MAX_PORTFOLIO_RISK, max_position_risk: float = MAX_POSITION_RISK) -> None
-  # portfolio_bot needed to get current positions for risk analysis
-  - Arguments: max_portfolio_risk (float, default MAX_PORTFOLIO_RISK), max_position_risk (float, default MAX_POSITION_RISK)
-  - Returns: None
-- analyze_position(self, position: Position) -> dict
-  - Arguments: position (Position)
-  - Returns: dict (risk metrics)
-- evaluate_portfolio_risk(self) -> dict
-  # Renamed from analyze_portfolio for clarity, uses internal portfolio_bot
-  - Returns: dict (portfolio risk metrics)
-
----
-
-## PositionSizerBot
-- __init__(self, portfolio_bot: 'PortfolioBot', risk_manager_bot: 'RiskManagerBot') -> None
-  # Needs portfolio_bot for available capital, risk_manager_bot for risk parameters
-- calculate_position_size(self, symbol: str, price: float, decision: 'TradingDecision', risk_per_trade_percent: float) -> float
-  - Arguments: symbol (str), price (float), decision (TradingDecision), risk_per_trade_percent (float)
-  - Returns: float (calculated position size in shares/units)
-
----
-
-## DatabaseBot
-- __init__(self, db_path: str = "trading_data.db") -> None
-- save_trade_outcome(self, trade_outcome: 'TradeOutcome') -> None
-- get_trade_history(self, symbol: str = None, limit: int = None) -> list['TradeOutcome']
-- save_reflection_insight(self, insight: 'ReflectionInsight') -> None
-- get_reflection_insights(self, symbol: str = None, limit: int = None) -> list['ReflectionInsight']
-
----
-
-## GeminiKeyManagerBot
-- __init__(self, daily_quota: int = 500) -> None
-  - Arguments: daily_quota (int, default 500)
-  - Returns: None
-- get_available_key(self) -> str | None
-  - Returns: str (API key) or None if all keys are exhausted for the current time window
-- record_usage(self, key: str) -> None
-  - Arguments: key (str)
-  - Returns: None
-- get_usage_report(self) -> dict
-  - Returns: dict (key: usage stats)
-- reset_usage(self) -> None
-  - Returns: None
-
----
-
-## KnowledgeGraphBot
-- __init__(self) -> None
-  - Returns: None
-- add_trading_decision(self, decision_id, symbol, action, confidence, timestamp=None, **kwargs) -> None
-  - Arguments: decision_id, symbol, action, confidence, timestamp (optional), **kwargs
-  - Returns: None
-- add_trade_outcome(self, outcome_id, decision_id, result, pnl, timestamp=None, **kwargs) -> None
-  - Arguments: outcome_id, decision_id, result, pnl, timestamp (optional), **kwargs
-  - Returns: None
-- get_decision_outcomes(self, decision_id) -> list[dict]
-  - Arguments: decision_id
-  - Returns: list of outcome node attribute dicts for the given decision
-- get_all_decisions(self) -> list[str]
-  - Returns: list of decision node names
-- get_all_outcomes(self) -> list[str]
-  - Returns: list of outcome node names
-- selftest(self) -> None
-  - Returns: None (prints test results)
-
----
-
-For more details, see each bot's Python file in the codebase.
+**Tip:**  
+- Use each bot's `selftest()` to verify setup before running the cycle.
+- Pass outputs from one step as inputs to the next.
+- For more details, see each bot's function docstring.

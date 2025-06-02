@@ -3,13 +3,38 @@
 ## Project Status
 
 **As of May 2025, StockAgenticAI is fully refactored, integrated, and tested.**
-- All configuration is centralized in `config_system.py` and `config_trading.py` (system/API) (strategy/bot).
+- All configuration is centralized in `config_system.py` and `config_trading.py` (system/API and strategy/bot).
 - Core RAG (Retrieval-Augmented Generation) and inter-agent data structures are defined in `data_structures.py`.
 - NewsRetrieverBot is fully implemented and integrated, providing news context to the trading decision process.
 - All bots dynamically load their configuration from config files (no hardcoded strategy parameters).
-- All unit, integration, and regression tests pass.
+- **All unit, integration, and regression tests pass (32 passed, 1 skipped).**
+- **All selftest() methods for bots pass.**
+- **Edge cases, error propagation, and fallback logic are robust and verified.**
+- **Placeholder detection is automated and passes.**
 - Logging is ASCII-safe and all performance metrics are floats.
-- The system is ready for further refinement or deployment.
+- The system is ready for deployment, extended paper trading, and live testing (see Section 6 in TODO.txt).
+
+## Key Configuration Flags
+
+- `SELFTEST_LIVE_API_CALLS_ENABLED` (in `config_system.py`):
+  - If `True`, selftest() methods for bots will make real API calls (use with caution).
+  - If `False`, all external API calls in selftest() are mocked for safety and speed.
+- `LOG_FULL_PROMPT` (in `config_system.py`):
+  - If `True`, logs full LLM prompts for debugging (at DEBUG level or when enabled).
+  - If `False`, only summary or key prompt info is logged.
+- `TEST_MODE_ENABLED` (in `config_system.py`):
+  - If `True`, enables rapid iteration, paper trading, and disables live trading.
+  - If `False`, enables realistic simulation or live trading (with ENABLE_TRADING_BOT).
+
+## VisualizerBot and Log Monitoring
+
+- To view logs and insights, use the standalone function `display_interactive_log_viewer()` from `bot_visualizer.py` (not as a method of VisualizerBot).
+- Example usage:
+  ```python
+  from bot_visualizer import display_interactive_log_viewer
+  display_interactive_log_viewer('trading.log', filter_keywords=['TRADE_OUTCOME', 'DECISION', 'ERROR'])
+  ```
+- See the "How to Use the Visualizer and Log Monitoring" section below for more details.
 
 ## Prerequisites
 - **Python 3.10** (recommended for compatibility)
@@ -376,7 +401,7 @@ This section provides instructions on how to directly access information from yo
 
 ---
 
-# Bot Architecture & Capabilities
+# StockAgenticAI - Architecture & Capabilities
 
 StockAgenticAI is a modular, agentic trading system composed of specialized bots, each responsible for a distinct aspect of the trading workflow. Key bots include:
 
@@ -419,29 +444,33 @@ kg_bot.selftest()  # Runs internal tests
 
 ---
 
-## Selftest & Health Checks
+## Logging System (2025 Overhaul)
 
-All major bots implement a `selftest()` method for rapid health checks and regression testing. This ensures that each bot's core logic, integration points, and data flows are functioning as expected.
+- All bots now use a centralized logging system via `LoggerMixin` and logging decorators.
+- Log output is standardized, with method entry/exit, errors, and key data points clearly recorded.
+- LLM prompts and responses are logged at INFO/DEBUG level, controlled by `LOG_FULL_PROMPT`.
+- All API quota, retry, and error events are logged in detail.
+- Log file: `trading.log` (see above for usage).
 
-**How to run a bot's selftest:**
-```python
-from bot_reflection import ReflectionBot
-ReflectionBot().selftest()
+## Placeholder Detection & Architectural Rules
 
-from bot_risk_manager import RiskManagerBot
-RiskManagerBot().selftest()
+- No production code may return, print, or log a placeholder, stub, or dummy value (e.g., 'Not implemented', 'Dummy value') except in test/mocked contexts.
+- Automated placeholder detection is enforced via `test_placeholder_detection.py` (pytest will fail if any are found).
+- All configuration is in `config_system.py` and `config_trading.py`.
+- All bot files are in the project root; utilities in `utils/`.
+- All test files are named `test_*.py` and in the project root.
 
-from bot_report import ReportBot
-ReportBot().selftest()
+## Selftest & End-to-End Testing
 
-from bot_knowledge_graph import KnowledgeGraphBot
-KnowledgeGraphBot().selftest()
-```
-
-**How to run all tests (including integration):**
-```
-pytest
-```
+- Each bot implements a `selftest()` method for functional verification (see code and above for usage).
+- Run all tests with:
+  ```powershell
+  pytest -v
+  ```
+- Run the automation script for full test and log check:
+  ```powershell
+  .\run_tests_and_log_check.ps1
+  ```
 
 ---
 
@@ -470,5 +499,34 @@ A PowerShell script is provided to automate running all tests and checking the t
 **Note:**
 - Ensure you have run `main.py` at least once to generate `trading.log`.
 - For continuous integration (CI), you can adapt this script for use in GitHub Actions or other CI/CD systems.
+
+---
+
+## Gemini API Quota Management & Best Practices
+
+**Gemini API (Google AI) has strict daily and per-minute quota limits. Exceeding these will result in errors, failed trades, or system downtime.**
+
+### Key Quota Considerations
+- **Daily quota:** Each Gemini API key has a daily request limit (see your Google Cloud Console for your quota).
+- **Per-minute quota:** There is also a per-minute rate limit. Too many requests in a short period will result in 429 errors.
+- **Multiple keys:** The system uses GeminiKeyManagerBot to rotate between multiple API keys for higher throughput and failover.
+
+### How to Adjust for Quota Limits
+- **TRADING_CYCLE_INTERVAL** (in `config_system.py`):
+  - Increase this value (e.g., 60–300 seconds) to reduce the frequency of LLM calls and avoid hitting per-minute limits.
+- **TRADING_ASSETS** (in `config_trading.py`):
+  - Reduce the number of assets analyzed per cycle to decrease total LLM/API calls.
+- **MAX_TOKENS** (in `config_system.py`):
+  - Lower this value to reduce the cost and size of each LLM call.
+- **LOG_FULL_PROMPT** (in `config_system.py`):
+  - Set to `False` to avoid excessive logging and reduce unnecessary LLM prompt output.
+- **Add more Gemini API keys:**
+  - Add additional keys to your Google Cloud project and list them in `config_system.py` to increase total available quota.
+
+### Best Practices
+- **Monitor quota usage:** Regularly check your Google Cloud Console for quota usage and errors.
+- **Start with a small number of assets and longer intervals:** This ensures you do not exhaust your quota during testing.
+- **Handle 429/Quota errors gracefully:** The system will log and skip cycles if quota is exceeded, but you should adjust settings if this occurs frequently.
+- **Paper trading:** Always use `TEST_MODE_ENABLED = True` and Alpaca paper trading for initial tests to avoid real losses due to quota issues.
 
 ---

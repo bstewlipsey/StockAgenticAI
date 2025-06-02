@@ -11,76 +11,52 @@ import os
 from dotenv import load_dotenv
 import logging.config
 
+FILE_LOG_LEVEL = "DEBUG"
+
 # Load environment variables
 load_dotenv()
 
-# === API Keys and Environment Configuration ===
+# =========================
+# [API_KEYS]
+# =========================
 ALPACA_API_KEY = os.getenv("ALPACA_API_KEY")
 ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY")
+# Gemini API keys: Ensure these are valid and not over quota.
 GEMINI_API_KEY_1 = os.getenv("GEMINI_API_KEY_1")  # Over quota
 GEMINI_API_KEY_2 = os.getenv("GEMINI_API_KEY_2")  # Over quota
 GEMINI_API_KEY_3 = os.getenv("GEMINI_API_KEY_3")  # Fresh, unused
 GEMINI_API_KEYS = [GEMINI_API_KEY_1, GEMINI_API_KEY_2, GEMINI_API_KEY_3]
-PAPER_TRADING = os.getenv('PAPER_TRADING', 'True').lower() == 'true'
-
-# Add your News API key here for NewsRetrieverBot
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 
-# Determine Alpaca API base URL based on paper trading status
+# =========================
+# [SYSTEM_SETTINGS]
+# =========================
+PAPER_TRADING = os.getenv("PAPER_TRADING", "True").lower() == "true"
 if PAPER_TRADING:
-    ALPACA_BASE_URL = "https://paper-api.alpaca.markets"  # Alpaca paper trading endpoint
+    ALPACA_BASE_URL = "https://paper-api.alpaca.markets"
 else:
-    ALPACA_BASE_URL = "https://api.alpaca.markets"      # Alpaca live trading endpoint
-
-# Alpaca data feed (IEX is free, SIP/Polygon require paid subscription)
+    ALPACA_BASE_URL = "https://api.alpaca.markets"
 ALPACA_DATA_FEED = "iex"
+MAX_RETRIES = 3
+RETRY_DELAY = 5
+RATE_LIMIT_DELAY_SECONDS = 3
+ERROR_RETRY_DELAY = 60
+TRADING_CYCLE_INTERVAL = 3600  # Increased to 1 hour to reduce API call frequency and avoid rate limits
+BASE_RETRY_DELAY = 5
+MAX_RETRY_BACKOFF_DELAY = 300
+JITTER_DELAY = 1
+DEFAULT_STOCK_TIMEFRAME = (1, "Day")
+DEFAULT_CRYPTO_TIMEFRAME = ("1", "h")
+LOOKBACK_PERIOD = 100
+ENABLE_TRADING_BOT = True
 
-# === System Settings ===
-# API and Connection Settings
-MAX_RETRIES = 3                     # Number of times to retry if an API call fails
-RETRY_DELAY = 5                     # Seconds to wait between retries (standard default)
-RATE_LIMIT_DELAY_SECONDS = 3        # Seconds to wait between API calls (e.g., for ccxt rate limiting)
-ERROR_RETRY_DELAY = 60              # Seconds to wait after an error before retrying a major operation
-
-# Set a higher interval to avoid Gemini quota exhaustion during testing
-# === TEST MODE AND TRADING INTERVAL (Section 2.3 Paper Trading Test) ===
-TEST_MODE_ENABLED = True  # Section 2.3: Ensure paper trading mode is enabled for debugging
-TRADING_CYCLE_INTERVAL = 1800  # Section 6.1: 30 minutes, quota-safe for multiple assets
-
-# Remove or comment out the quick test override to enforce quota-safe interval
-# if 'TEST_MODE_ENABLED' in globals() and TEST_MODE_ENABLED:
-#     TRADING_CYCLE_INTERVAL = 5  # 5 seconds for rapid test mode
-
-# === Retry Strategy Configuration ===
-BASE_RETRY_DELAY = 5                # Base delay in seconds for exponential backoff
-MAX_RETRY_BACKOFF_DELAY = 300       # Maximum delay in seconds for exponential backoff
-JITTER_DELAY = 1                    # Maximum jitter in seconds to add to retry delay
-
-# === Market Data Configuration ===
-# For Alpaca, valid TimeFrameUnit enum names are: 'Minute', 'Hour', 'Day', 'Week', 'Month'
-# For Kraken/CCXT, valid timeframes are typically: '1m', '5m', '15m', '1h', '4h', '1d', etc.
-# Example enum-like usage:
-#   STOCK: DEFAULT_STOCK_TIMEFRAME = (1, "Day")   # 1 day bars
-#   CRYPTO: DEFAULT_CRYPTO_TIMEFRAME = ("1", "d") # 1 day bars ("m"=minute, "h"=hour, "d"=day)
-#   # To use: timeframe = f"{value}{unit}"  # e.g., "1d", "15m"
-DEFAULT_STOCK_TIMEFRAME = (1, "Day")       # (value, unit) for Alpaca TimeFrame
-DEFAULT_CRYPTO_TIMEFRAME = ("1", "h")   # (value, unit) for Kraken/CCXT or similar
-LOOKBACK_PERIOD = 100         # Number of candlesticks to analyze
-
-# === LLM (AI) Configuration ===
-GEMINI_MODEL = "gemini-1.5-flash"  # Which Gemini model to use (updated to working model)
-MAX_TOKENS = 500             # Lowered for quota conservation
-TEMPERATURE = 0.5            # Lowered for more deterministic, shorter responses
-
-# Enable or disable continuous trading bot loop
-ENABLE_TRADING_BOT = False   # Set to False to disable continuous trading
-
-# === AI Analysis Templates (System-wide) ===
-ANALYSIS_SCHEMA = """{
-    "action": "buy"|"sell"|"hold",
-    "reasoning": "<1 brief sentence>",
-    "confidence": <number between 0.0 and 1.0>
-}"""
+# =========================
+# [LLM_SETTINGS]
+# =========================
+GEMINI_MODEL = "gemini-1.5-flash"
+MAX_TOKENS = 500
+TEMPERATURE = 0.5
+ANALYSIS_SCHEMA = """{\n    \"action\": \"buy\"|\"sell\"|\"hold\",\n    \"reasoning\": \"<1 brief sentence>\",\n    \"confidence\": <number between 0.0 and 1.0>\n}"""
 
 # Template for cryptocurrency analysis prompts
 CRYPTO_ANALYSIS_TEMPLATE = """Analyze this cryptocurrency and respond ONLY with valid JSON matching this schema exactly:
@@ -221,80 +197,86 @@ Example 8:
 {"action": "hold", "reasoning": "All indicators are ambiguous and data is missing, so no actionable trade is possible", "confidence": 0.18}
 """
 
-# Logging Configuration
-LOGGING_CONFIG = {
-    'version': 1,
-    'formatters': {
-        'standard': {
-            'format': '%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-        },
-    },
-    'handlers': {
-        'console': {
-            'level': 'INFO',
-            'class': 'logging.StreamHandler',
-            'formatter': 'standard',
-        },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'formatter': 'standard',
-            'filename': 'trading.log',
-            'mode': 'a',
-        },
-    },
-    'root': {
-        'handlers': ['console', 'file'],
-        'level': 'INFO',
-    },
-}
+# =========================
+# [LOGGING_SETTINGS]
+# =========================
+# Remove old LOGGING_CONFIG and logging.config.dictConfig usage
+# Logging is now handled by utils/logging_setup.py
+LOG_FULL_PROMPT = False  # Only log full LLM prompts if True or log level is DEBUG
 
-# Initialize logging
-logging.config.dictConfig(LOGGING_CONFIG)
+# =========================
+# [TEST_SETTINGS]
+# =========================
+TEST_MODE_ENABLED = True  # Enables paper trading and test logic
+SELFTEST_LIVE_API_CALLS_ENABLED = (
+    False  # Controls if selftest() methods make live API calls
+)
 
-# Check Python version
-import sys
-print("Python version:", sys.version)
 
+# =========================
+# [QUOTA_SETTINGS]
+# =========================
+NEWS_API_QUOTA_PER_MINUTE = int(os.getenv("NEWS_API_QUOTA_PER_MINUTE", 20))  # Default: 20 req/min
+GEMINI_API_QUOTA_PER_MINUTE = 60  # Gemini: 60 requests/minute (adjust as needed)
+
+# =========================
+# [NEWS_API_SETTINGS]
+# =========================
+NEWS_API_MAX_RETRIES = int(os.getenv("NEWS_API_MAX_RETRIES", 5))
+NEWS_API_RETRY_DELAY = int(os.getenv("NEWS_API_RETRY_DELAY", 5))
+NEWS_API_BACKOFF_FACTOR = float(os.getenv("NEWS_API_BACKOFF_FACTOR", 2.0))
+NEWS_API_MAX_BACKOFF = int(os.getenv("NEWS_API_MAX_BACKOFF", 120))
+
+# === Validate Startup Configuration ===
+# (Retained from original code)
 def validate_startup_config():
     import sys
-    import types
     import logging
+
     logger = logging.getLogger(__name__)
     errors = []
     # Validate config_system.py essentials
     try:
         import config_system as cs
+
         if not cs.ALPACA_API_KEY or not cs.ALPACA_SECRET_KEY:
-            errors.append('Missing Alpaca API keys.')
+            errors.append("Missing Alpaca API keys.")
         if not cs.GEMINI_API_KEYS or not any(cs.GEMINI_API_KEYS):
-            errors.append('No Gemini API keys configured.')
-        if not isinstance(cs.TRADING_CYCLE_INTERVAL, int) or cs.TRADING_CYCLE_INTERVAL <= 0:
-            errors.append('TRADING_CYCLE_INTERVAL must be a positive integer.')
-        if not hasattr(cs, 'ENABLE_TRADING_BOT'):
-            errors.append('ENABLE_TRADING_BOT missing.')
-        if not hasattr(cs, 'PAPER_TRADING'):
-            errors.append('PAPER_TRADING missing.')
+            errors.append("No Gemini API keys configured.")
+        if (
+            not isinstance(cs.TRADING_CYCLE_INTERVAL, int)
+            or cs.TRADING_CYCLE_INTERVAL <= 0
+        ):
+            errors.append("TRADING_CYCLE_INTERVAL must be a positive integer.")
+        if not hasattr(cs, "ENABLE_TRADING_BOT"):
+            errors.append("ENABLE_TRADING_BOT missing.")
+        if not hasattr(cs, "PAPER_TRADING"):
+            errors.append("PAPER_TRADING missing.")
     except Exception as e:
-        errors.append(f'config_system.py import/validation error: {e}')
+        errors.append(f"config_system.py import/validation error: {e}")
     # Validate config_trading.py essentials
     try:
         import config_trading as ct
-        if not hasattr(ct, 'TOTAL_CAPITAL') or ct.TOTAL_CAPITAL <= 0:
-            errors.append('TOTAL_CAPITAL must be > 0.')
-        if not hasattr(ct, 'TRADING_ASSETS') or not isinstance(ct.TRADING_ASSETS, list) or not ct.TRADING_ASSETS:
-            errors.append('TRADING_ASSETS must be a non-empty list.')
-        if not hasattr(ct, 'MIN_CONFIDENCE') or not (0 <= ct.MIN_CONFIDENCE <= 1):
-            errors.append('MIN_CONFIDENCE must be between 0 and 1.')
+
+        if not hasattr(ct, "TOTAL_CAPITAL") or ct.TOTAL_CAPITAL <= 0:
+            errors.append("TOTAL_CAPITAL must be > 0.")
+        if (
+            not hasattr(ct, "TRADING_ASSETS")
+            or not isinstance(ct.TRADING_ASSETS, list)
+            or not ct.TRADING_ASSETS
+        ):
+            errors.append("TRADING_ASSETS must be a non-empty list.")
+        if not hasattr(ct, "MIN_CONFIDENCE") or not (0 <= ct.MIN_CONFIDENCE <= 1):
+            errors.append("MIN_CONFIDENCE must be between 0 and 1.")
     except Exception as e:
-        errors.append(f'config_trading.py import/validation error: {e}')
+        errors.append(f"config_trading.py import/validation error: {e}")
     if errors:
         for err in errors:
-            logger.error(f'[CONFIG VALIDATION ERROR] {err}')
-        print('\n'.join(['[CONFIG VALIDATION ERROR] ' + e for e in errors]), file=sys.stderr)
+            logger.error(f"[CONFIG VALIDATION ERROR] {err}")
         sys.exit(1)
     else:
-        logger.info('Startup configuration validation passed.')
+        logger.info("Startup configuration validation passed.")
+
 
 # Run validation at import
 validate_startup_config()

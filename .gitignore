@@ -4,5 +4,4 @@
 __pycache__/
 .vscode/
 trading_history.db
-trading.log
 reports/
